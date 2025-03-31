@@ -1,0 +1,397 @@
+{
+  "$schema": "http://json-schema.org/draft-04/schema#",
+  "id": "local://iroko/organization-v1.0.0.json",
+  "title": "Organization Schema, use https://www.grid.ac/format as a base",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "identifiers",
+    "id",
+    "name"
+  ],
+  "properties": {
+    "id": {
+      "type": "string",
+      "description": "Iroko Organization UUID, pid_type = orgid"
+    },
+    "identifiers": {
+      "type": "array",
+      "description": "Organization Identifiers, different from GRID mapping",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "idtype": {
+            "description": "identifier type",
+            "type": "string",
+            "enum": [
+              "grid",
+              "wkdata",
+              "ror",
+              "isni",
+              "orgref",
+              "fudref",
+              "reup",
+              "orgaid",
+              "uniid",
+              "orgid"
+            ]
+          },
+          "value": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "name": {
+      "type": "string",
+      "description": "The name typically used to refer to the institute."
+    },
+    "status": {
+      "type": "string",
+      "description": "For an active institute, this is always set to active",
+      "enum": [
+        "active",
+        "obsolete",
+        "redirected",
+        "unknown"
+      ]
+    },
+    "aliases": {
+      "type": "array",
+      "description": "A list of other names the institute is known as",
+      "items": {
+        "type": "string"
+      }
+    },
+    "acronyms": {
+      "type": "array",
+      "description": "A list of short acronyms the institute is known as (e.g. MRC for the Medical Research Council)",
+      "items": {
+        "type": "string"
+      }
+    },
+    "types": {
+      "type": "array",
+      "description": "A list of types describing the institute.",
+      "items": {
+        "type": "string",
+        "enum": [
+          "Education",
+          "Healthcare",
+          "Company",
+          "Archive",
+          "Nonprofit",
+          "Government",
+          "Facility",
+          "Other"
+        ]
+      }
+    },
+    "wikipedia_url": {
+      "type": "string",
+      "description": "URL of the wikipedia page for the institute"
+    },
+    "email_address": {
+      "type":  "string",
+      "description": "A contact email address for the institute"
+    },
+    "ip_addresses": {
+      "type": "array",
+      "description": "IP addresses known to belong to the institute",
+      "items": {
+        "type": "string"
+      }
+    },
+    "established": {
+      "type": "integer",
+      "description": "The year the organization opened, CE"
+    },
+    "onei_registry": {
+      "type": "integer",
+      "description": "The year the organization was include in ONEI registry"
+    },
+    "exportable": {
+      "type": "boolean",
+      "description": "If true means it's ready for be exported for other systems"
+    },
+    "research_activity": {
+      "type": "boolean",
+      "description": "If true means the org perform some research activity"
+    },
+    "links": {
+      "type": "array",
+      "description": "An array of URLs linking to things like the homepage for the institute",
+      "items": {
+        "type": "string"
+      }
+    },
+    "labels": {
+      "description": "The name of the institute in different languages",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "label": {
+            "type": "string",
+            "description": "The institute name in a language variant"
+          },
+          "iso639": {
+            "type": "string",
+            "description": "The ISO-639-1 language code"
+          }
+        }
+      }
+    },
+    "relationships": {
+      "description": "Any relationships the institute has to others.",
+      "minItems": 0,
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "identifiers": {
+            "type": "array",
+            "description": "Related Organization Identifiers",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "idtype": {
+                  "description": "identifier type",
+                  "type": "string",
+                  "enum": [
+                    "grid",
+                    "wkdata",
+                    "ror",
+                    "isni",
+                    "orgref",
+                    "fudref",
+                    "reup",
+                    "orgaid",
+                    "uniid",
+                    "orgid"
+                  ]
+                },
+                "value": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "type": {
+            "description": "The relationship type.",
+            "type": "string",
+            "enum": [
+              "parent",
+              "related",
+              "child",
+              "other"
+            ]
+          },
+          "label": {
+            "type": "string",
+            "description": "The name of the related institute"
+          },
+          "id": {
+            "type": "string",
+            "description": "Iroko Organization UUID"
+          }
+        }
+      }
+    },
+    "addresses": {
+      "type": "array",
+      "description": "An array of addresses associated with the institute",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": true,
+        "properties": {
+          "city": {
+            "type": "string",
+            "description": "The name of the city"
+          },
+          "country": {
+            "type": "string",
+            "description": "The name of the country"
+          },
+          "country_code": {
+            "type": "string",
+            "description": "The ISO 3166-1 alpha-2 code of the country"
+          },
+          "lat": {
+            "type": "number",
+            "description": "Latitute of the institute"
+          },
+          "lng": {
+            "type": "number",
+            "description": "Longitude of the institute"
+          },
+          "line_1": {
+            "type": "string",
+            "description": "First line of the address"
+          },
+          "line_2": {
+            "type": "string",
+            "description": "Second line of the address"
+          },
+          "line_3": {
+            "type": "string",
+            "description": "Third line of the address"
+          },
+          "postcode": {
+            "type": "string",
+            "description": "The postcode/zipcode"
+          },
+          "primary": {
+            "type": "boolean",
+            "description": "If there is more than one address, identifies the main location"
+          },
+          "state": {
+            "type": "string",
+            "description": "The name of the state/region"
+          },
+          "state_code": {
+            "type": "string",
+            "description": "The ISO 3166-2 region code"
+          },
+          "municipality": {
+            "type": "string",
+            "description": "The name of the municipality"
+          },
+          "municipality_dpa": {
+            "type": "string",
+            "description": "The DPA minicipality code"
+          },
+          "geonames_city": {
+            "type": "object",
+            "description": "The linked GeoNames data. We put this like GRID, but we need to see if is really necessary or practicall for us.",
+            "properties": {
+              "id": {
+                "type": "number",
+                "description": "The GeoNames ID"
+              },
+              "city": {
+                "type": "string",
+                "description": "The name of the city"
+              },
+              "geonames_admin1": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "description": "The ID in the region format"
+                  },
+                  "name": {
+                    "type": "string",
+                    "description": "The name of the region"
+                  },
+                  "ascii_name": {
+                    "type": "string",
+                    "description": "A preferred ASCII encoded name for the region"
+                  }
+                }
+              },
+              "geonames_admin2": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "description": "The ID in the region format"
+                  },
+                  "name": {
+                    "type": "string",
+                    "description": "The name of the region"
+                  },
+                  "ascii_name": {
+                    "type": "string",
+                    "description": "A preferred ASCII encoded name for the region"
+                  }
+                }
+              },
+              "nuts_level1": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "description": "The ID in the region format"
+                  },
+                  "name": {
+                    "type": "string",
+                    "description": "The name of the region"
+                  },
+                  "ascii_name": {
+                    "type": "string",
+                    "description": "A preferred ASCII encoded name for the region"
+                  }
+                }
+              },
+              "nuts_level2": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "description": "The ID in the region format"
+                  },
+                  "name": {
+                    "type": "string",
+                    "description": "The name of the region"
+                  },
+                  "ascii_name": {
+                    "type": "string",
+                    "description": "A preferred ASCII encoded name for the region"
+                  }
+                }
+              },
+              "nuts_level3": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "description": "The ID in the region format"
+                  },
+                  "name": {
+                    "type": "string",
+                    "description": "The name of the region"
+                  },
+                  "ascii_name": {
+                    "type": "string",
+                    "description": "A preferred ASCII encoded name for the region"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "redirect": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "idtype": {
+          "description": "identifier type",
+          "type": "string",
+          "enum": [
+            "grid",
+            "wkdata",
+            "ror",
+            "isni",
+            "orgref",
+            "fudref",
+            "reup",
+            "orgaid",
+            "uniid",
+            "orgid"
+          ]
+        },
+        "value": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}
+

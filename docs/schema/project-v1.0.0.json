@@ -1,0 +1,515 @@
+{
+  "$schema": "http://json-schema.org/draft-04/schema",
+  "id": "local://iroko/project-v1.0.0.json",
+  "title": "Project Schema",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["creator", "id", "identifiers", "title"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "description": "Iroko UUID, pid_type = perid"
+    },
+    "identifiers": {
+      "type": "array",
+      "description": "Project Identifiers",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "idtype": {
+            "description": "identifier type",
+            "type": "string"
+          },
+          "value": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "title": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["title"],
+        "properties": {
+          "title": {
+            "type": "string"
+          },
+          "lang": {
+            "type": "string",
+            "description": "Use el atributo xml:lang para indicar el idioma del título. El valor del atributo debe elegirse de IETF BCP 47, Registro de Subetiquetas de Idiomas de IANA."
+          },
+          "titleType": {
+            "type": "string",
+            "enum": ["AlternativeTitle", "Subtitle", "TranslatedTitle", "Other"]
+          }
+        }
+      },
+      "description": "Utilice el nombre del título como valor. Repita esta propiedad para los diferentes tipos o idiomas de los títulos."
+    },
+    "creator": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "description": "Autor Schema",
+        "required": ["creatorName", "givenName", "familyName"],
+        "properties": {
+          "creatorName": {
+            "type": "string",
+            "description": "Escribir en el formato: Apellido(s), Nombre(s) Los nombres en alfabetos latinos pueden transliterarse siguiendo las normas de la ALA-LC."
+          },
+          "nameType": {
+            "type": "string",
+            "description": "Valores de la lista controlada (Organizacional | Personal)",
+            "enum": ["Organizational", "Personal"]
+          },
+          "givenName": {
+            "type": "string",
+            "description": "Nombre propio o de pila del autor."
+          },
+          "familyName": {
+            "type": "string",
+            "description": "Apellido del autor"
+          },
+          "id": {
+            "type": "string"
+          },
+          "identifiers": {
+            "type": "array",
+            "description": "Projects Identifiers",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "idtype": {
+                  "description": "identifier type",
+                  "type": "string"
+                },
+                "value": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "affiliations": {
+            "description": "Affiliations of the person",
+            "minItems": 0,
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "description": "Iroko Organization UUID"
+                },
+                "identifiers": {
+                  "type": "array",
+                  "description": "Organization Identifiers",
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "idtype": {
+                        "description": "identifier type",
+                        "type": "string"
+                      },
+                      "value": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                },
+                "start_date": {
+                  "description": "Start date of the affiliation",
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "end_date": {
+                  "description": "End date of the affiliation. None means to this date.",
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "label": {
+                  "type": "string",
+                  "description": "The name of the related institute"
+                },
+                "roles": {
+                  "type": "array",
+                  "description": "Roles within the organization",
+                  "items": {
+                    "type": "string",
+                    "description": "Role (use controlled vocabulary)"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "description": "Autores de la publicación en orden de prioridad. Puede ser un nombre corporativo/institucional o personal."
+    },
+    "contributor": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "contributorType": {
+            "type": "string",
+            "enum": [
+              "ContactPerson",
+              "DataCollector",
+              "DataCurator",
+              "DataManager",
+              "Distributor",
+              "Editor",
+              "HostingInstitution",
+              "Producer",
+              "ProjectLeader",
+              "ProjectManager",
+              "ProjectMember",
+              "RegistrationAgency",
+              "RegistrationAuthority",
+              "RelatedPerson",
+              "Researcher",
+              "ResearchGroup",
+              "RightsHolder",
+              "Sponsor",
+              "Supervisor",
+              "WorkPackageLeader",
+              "Other"
+            ]
+          },
+          "contributorName": {
+            "type": "string",
+            "description": "Es obligatorio si se utiliza contributor."
+          },
+          "nameType": {
+            "type": "string",
+            "description": "Valores de la lista controlada (Organizacional | Personal)",
+            "enum": ["Organizational", "Personal"]
+          },
+          "givenName": {
+            "type": "string",
+            "description": "Nombre propio o de pila del autor."
+          },
+          "familyName": {
+            "type": "string",
+            "description": "Apellido del autor"
+          },
+          "id": {
+            "type": "string"
+          },
+          "identifiers": {
+            "type": "array",
+            "description": "Person Identifiers",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "idtype": {
+                  "description": "identifier type",
+                  "type": "string"
+                },
+                "value": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "affiliations": {
+            "description": "Affiliations of the person",
+            "minItems": 0,
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "description": "Iroko Organization UUID"
+                },
+                "identifiers": {
+                  "type": "array",
+                  "description": "Organization Identifiers",
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "idtype": {
+                        "description": "identifier type",
+                        "type": "string"
+                      },
+                      "value": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                },
+                "start_date": {
+                  "description": "Start date of the affiliation",
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "end_date": {
+                  "description": "End date of the affiliation. None means to this date.",
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "label": {
+                  "type": "string",
+                  "description": "The name of the related institute"
+                },
+                "roles": {
+                  "type": "array",
+                  "description": "Roles within the organization",
+                  "items": {
+                    "type": "string",
+                    "description": "Role (use controlled vocabulary)"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "fundingReference": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "description": "Financiador Schema",
+        "properties": {
+          "founderName": {
+            "type": "string",
+            "description": "Nombre del proveedor del financiamiento. Es obligatorio si se usa fundingReference."
+          },
+          "funderIdentifier": {
+            "type": "object",
+            "description": "Identificador único de la entidad financiadora.",
+            "properties": {
+              "fundType": {
+                "type": "string",
+                "description": "Tipo de identificador único de la entidad financiadora. Valores de la lista controlada",
+                "enum": ["ISNI", "GRID", "Crossref Funder"]
+              },
+              "fundValue": {
+                "type": "string"
+              }
+            }
+          },
+
+          "fundingStream": {
+            "type": "string",
+            "description": "Nombre de la vía de financiamiento (opcional)"
+          },
+          "awardNumber": {
+            "type": "string",
+            "description": "Indica el número de identificación de la subvención del proyecto o el número de adjudicación"
+          },
+          "awardURI": {
+            "type": "string",
+            "description": "URI de la página de presentación del proyecto proporcionada por el financiador para obtener más información sobre la adjudicación (subvención)"
+          },
+          "awardTitle": {
+            "type": "string",
+            "description": "Título del proyecto, adjudicación o subvención."
+          }
+        }
+      },
+      "description": "Repita esta propiedad para indicar los diferentes financiadores y proyectos"
+    },
+    "alternateIdentifier": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "idValue": {
+            "type": "string",
+            "description": "Valor del identificador alternativo."
+          },
+          "idType": {
+            "type": "string",
+            "enum": [
+              "ARK",
+              "arXiv",
+              "bibcode",
+              "DOI",
+              "EAN13",
+              "EISSN",
+              "Handle",
+              "IGSN",
+              "ISBN",
+              "ISSN",
+              "ISTC",
+              "LISSN",
+              "LSID",
+              "PISSN",
+              "PMID",
+              "PURL",
+              "UPC",
+              "URL",
+              "URN",
+              "WOS"
+            ]
+          }
+        }
+      }
+    },
+    "relatedIdentifier": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "idValue": {
+            "type": "string",
+            "description": "Valor del identificador alternativo."
+          },
+          "idType": {
+            "type": "string",
+            "enum": [
+              "ARK",
+              "arXiv",
+              "bibcode",
+              "DOI",
+              "EAN13",
+              "EISSN",
+              "Handle",
+              "IGSN",
+              "ISBN",
+              "ISSN",
+              "ISTC",
+              "LISSN",
+              "LSID",
+              "PISSN",
+              "PMID",
+              "PURL",
+              "UPC",
+              "URL",
+              "URN",
+              "WOS"
+            ]
+          },
+          "relationType": {
+            "type": "string",
+            "enum": [
+              "isCitedBy",
+              "Cites",
+              "IsSupplementTo",
+              "IsSupplementedBy",
+              "IsContinuedBy",
+              "Continues",
+              "IsDescribedBy",
+              "Describes",
+              "HasMetadata",
+              "IsMetadataFor",
+              "HasVersion",
+              "IsVersionOf",
+              "IsNewVersionOf",
+              "IsPreviousVersionOf",
+              "IsPartOf",
+              "HasPart",
+              "IsReferencedBy",
+              "References",
+              "IsDocumentedBy",
+              "Documents",
+              "IsCompiledBy",
+              "Compiles",
+              "IsVariantFormOf",
+              "IsOriginalFormOf",
+              "IsIdenticalTo",
+              "IsReviewedBy",
+              "Reviews",
+              "IsDerivedFrom",
+              "IsSourceOf ",
+              "IsRequiredBy",
+              "Requires"
+            ]
+          },
+          "relatedMetadataScheme": {
+            "type": "string",
+            "description": "Úsese solo con este par de relaciones: (HasMetadata/IsMetadataFor)."
+          },
+          "schemeURI": {
+            "type": "string",
+            "description": "URI del esquema de metadatos relacionado señalado en relatedMetadataScheme. Valores permitidos, ejemplos y otras restricciones Úsese solo con este par de relaciones: (HasMetadata/IsMetadataFor)."
+          },
+          "schemeType": {
+            "type": "string",
+            "description": "Se refiere al tipo de esquema de metadatos relacionado señalado en relatedMetadataScheme, vinculado con schemeURI."
+          },
+          "resourceTypeGeneral": {
+            "type": "string",
+            "enum": [
+              "Audiovisual",
+              "Collection",
+              "DataPaper",
+              "Dataset",
+              "Event",
+              "Image",
+              "InteractiveResource",
+              "Model",
+              "PhysicalObject",
+              "Service",
+              "Software",
+              "Sound",
+              "Text",
+              "Workflow",
+              "Other"
+            ]
+          }
+        }
+      }
+    },
+    "datesRights": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "items": {
+        "type": "object",
+        "properties": {
+          "dateValue": {
+            "type": "string"
+          },
+          "dateType": {
+            "type": "string",
+            "enum": ["Accepted", "Available", "Issued"],
+            "description": "Elija del vocabulario de tipo de fecha el término controlado Accepted para indicar el inicio y el término Available para indicar el final de un período de embargo. Valores de la lista controlada de tipo de fecha"
+          }
+        }
+      },
+      "description": "Use la fecha de inicio del embargo como valor en una instancia y la fecha de finalización en otra instancia."
+    },
+    "language": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Utilice el código del idioma como valor."
+    },
+    "publisher": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Utilice el nombre de la editorial como valor."
+    },
+    "publishDate": {
+      "type": "object",
+      "properties": {
+        "dateValue": {
+          "type": "string"
+        },
+        "dateType": {
+          "type": "string",
+          "enum": ["Accepted", "Available", "Issued"],
+          "description": "Elija del vocabulario de tipo de fecha el término controlado Accepted para indicar el inicio y el término Available para indicar el final de un período de embargo. Valores de la lista controlada de tipo de fecha"
+        }
+      },
+      "description": "Use la fecha de inicio del embargo como valor en una instancia y la fecha de finalización en otra instancia."
+    }
+  }
+}

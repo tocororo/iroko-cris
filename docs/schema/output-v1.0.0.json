@@ -1,0 +1,394 @@
+{
+  "$schema": "http://json-schema.org/draft-04/schema#",
+  "id": "local://iroko/record-v1.0.0.json",
+  "additionalProperties": true,
+  "title": "iroko v1.0.0",
+  "type": "object",
+  "properties": {
+    "id": {
+      "description": "Iroko UUID, pid_type = irouid",
+      "type": "string"
+    },
+    "identifiers": {
+      "description": "identificadores del record",
+      "items": {
+        "additionalProperties": false,
+        "type": "object",
+        "properties": {
+          "idtype": {
+            "description": "el tipo de identificador",
+            "type": "string",
+            "enum": [
+              "ark",
+              "arxiv",
+              "doi",
+              "bibcode",
+              "ean8",
+              "ean13",
+              "eissn",
+              "handle",
+              "isbn",
+              "issn",
+              "istc",
+              "lissn",
+              "lsid",
+              "pmid",
+              "pmcid",
+              "purl",
+              "upc",
+              "url",
+              "urn",
+              "orcid",
+              "gnd",
+              "ads",
+              "oai",
+              "irouid"
+            ]
+          },
+          "value": {
+            "type": "string"
+          }
+        }
+      },
+      "type": "array"
+    },
+    "source_repo": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "uuid": {
+          "description": "Source UUID from which the document was harvest",
+          "type": "string"
+        },
+        "name": {
+          "description": "Source Name from which the document was harvest",
+          "type": "string"
+        }
+      }
+    },
+    "spec": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "code": {
+          "description": "setSpec element from Dublin Core, the code",
+          "type": "string"
+        },
+        "name": {
+          "description": "setSpec Name from Dublin Core, the full name",
+          "type": "string"
+        }
+      }
+    },
+    "title": {
+      "description": "Document title.",
+      "type": "string"
+    },
+    "creators": {
+      "description": "Contributors in order of importance.",
+      "minItems": 0,
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "ids": {
+            "description": "List of IDs related with the person.",
+            "type": "array",
+            "uniqueItems": true,
+            "items": {
+              "additionalProperties": false,
+              "type": "object",
+              "properties": {
+                "source": {
+                  "type": "string"
+                },
+                "value": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "name": {
+            "description": "Full name of person or organisation. Personal name format: family, given.",
+            "type": "string"
+          },
+          "affiliations": {
+            "description": "Affiliation(s) for the purpose of this specific document.",
+            "type": "array",
+            "uniqueItems": true,
+            "items": {
+              "type": "string"
+            }
+          },
+          "email": {
+            "type": "string",
+            "description": "Contact email for the purpose of this specific document.",
+            "format": "email"
+          },
+          "roles": {
+            "description": "",
+            "uniqueItems": true,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "Author",
+                "ContactPerson",
+                "DataCollector",
+                "DataCurator",
+                "DataManager",
+                "Distributor",
+                "Editor",
+                "JournalManager",
+                "Funder",
+                "HostingInstitution",
+                "Other",
+                "Producer",
+                "ProjectLeader",
+                "ProjectManager",
+                "ProjectMember",
+                "RegistrationAgency",
+                "RegistrationAuthority",
+                "RelatedPerson",
+                "ResearchGroup",
+                "RightsHolder",
+                "Researcher",
+                "Sponsor",
+                "Supervisor",
+                "WorkPackageLeader"
+              ]
+            }
+          }
+        },
+        "required": [
+          "name"
+        ]
+      }
+    },
+    "keywords": {
+      "description": "Free text keywords.",
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "description": {
+      "description": "Description/abstract for document.",
+      "type": "string"
+    },
+    "publisher": {
+      "description": "Publisher name",
+      "type": "string"
+    },
+    "sources": {
+      "description": "Free text keywords.",
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "rights": {
+      "description": "Rights.",
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "types": {
+      "description": "Types. Eg: info:eu-repo/semantics/article, or Artículo revisado por pares",
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "formats": {
+      "description": "formats. Eg: application/pdf",
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "language": {
+      "description": "ISO 639-3 language code.",
+      "type": "string"
+    },
+    "publication_date": {
+      "description": "When the document is published",
+      "type": "string",
+      "format": "date-time"
+    },
+    "dates": {
+      "description": "dates related to the record",
+      "type": "array",
+      "items": {
+        "additionalProperties": false,
+        "type": "object",
+        "properties": {
+          "date": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "info": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "contributors": {
+      "description": "Contributors in order of importance.",
+      "minItems": 0,
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "ids": {
+            "description": "List of IDs related with the person.",
+            "type": "array",
+            "uniqueItems": true,
+            "items": {
+              "additionalProperties": false,
+              "type": "object",
+              "properties": {
+                "source": {
+                  "type": "string"
+                },
+                "value": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "name": {
+            "description": "Full name of person or organisation. Personal name format: family, given.",
+            "type": "string"
+          },
+          "affiliations": {
+            "description": "Affiliation(s) for the purpose of this specific document.",
+            "type": "array",
+            "uniqueItems": true,
+            "items": {
+              "type": "string"
+            }
+          },
+          "email": {
+            "type": "string",
+            "description": "Contact email for the purpose of this specific document.",
+            "format": "email"
+          },
+          "roles": {
+            "description": "",
+            "uniqueItems": true,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "Author",
+                "ContactPerson",
+                "DataCollector",
+                "DataCurator",
+                "DataManager",
+                "Distributor",
+                "Editor",
+                "JournalManager",
+                "Funder",
+                "HostingInstitution",
+                "Other",
+                "Producer",
+                "ProjectLeader",
+                "ProjectManager",
+                "ProjectMember",
+                "RegistrationAgency",
+                "RegistrationAuthority",
+                "RelatedPerson",
+                "ResearchGroup",
+                "RightsHolder",
+                "Researcher",
+                "Sponsor",
+                "Supervisor",
+                "WorkPackageLeader"
+              ]
+            }
+          }
+        },
+        "required": [
+          "name"
+        ]
+      }
+    },
+    "references": {
+      "description": "Raw textual references",
+      "items": {
+        "additionalProperties": true,
+        "properties": {
+          "raw_reference": {
+            "type": "string"
+          }
+        },
+        "title": "Reference",
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "organizations": {
+      "description": "list of organizations of related to this source",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": true,
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "identifier of the ORG"
+          },
+          "name": {
+            "type": "string",
+            "description": "the name of the ORG"
+          },
+          "role": {
+            "type": "string",
+            "description": "the role of the organization"
+          }
+        }
+      }
+    },
+    "classifications": {
+      "description": "list of terms of related to this source",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": true,
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "identifier the term related to this source"
+          },
+          "description": {
+            "type": "string",
+            "description": "the name of the term related to this source"
+          },
+          "vocabulary": {
+            "type": "string",
+            "description": "the vocabulary of the classification"
+          }
+        }
+      }
+    },
+    "terms": {
+      "description": "UUID of related iroko terms",
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "status": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "id",
+    "source_repo",
+    "title"
+  ]
+}

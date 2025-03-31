@@ -1,0 +1,255 @@
+{
+  "$schema": "http://json-schema.org/draft-04/schema#",
+  "id": "local://iroko/source-v1.0.0.json",
+  "title": "Schema Source",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "identifiers",
+    "id",
+    "title",
+    "source_status",
+    "source_type"
+  ],
+  "properties": {
+    "id": {
+      "description": "Source UUID , pid_type = srcid",
+      "type": "string"
+    },
+    "identifiers": {
+      "description": "identificadores de la fuente",
+      "items": {
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "idtype",
+          "value"
+        ],
+        "properties": {
+          "idtype": {
+            "description": "el tipo de identificador",
+            "type": "string",
+            "enum": [
+              "ark",
+              "arxiv",
+              "doi",
+              "bibcode",
+              "ean8",
+              "ean13",
+              "handle",
+              "isbn",
+              "issn_l",
+              "issn_p",
+              "issn_e",
+              "issn_c",
+              "issn_o",
+              "istc",
+              "lsid",
+              "pmid",
+              "pmcid",
+              "purl",
+              "upc",
+              "url",
+              "urn",
+              "orcid",
+              "gnd",
+              "ads",
+              "oai",
+              "prnps",
+              "ernps",
+              "oaiurl",
+              "srcid"
+            ]
+          },
+          "value": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      },
+      "type": "array"
+    },
+    "name": {
+      "type": "string"
+    },
+    "title": {
+      "type": "string"
+    },
+    "aliases": {
+      "type": "array",
+      "description": "A list of other names the source is known as",
+      "items": {
+        "type": "string"
+      }
+    },
+    "source_type": {
+      "type": "string",
+      "enum": [
+        "JOURNAL",
+        "SERIAL",
+        "STUDENT",
+        "POPULARIZATION",
+        "REPOSITORY",
+        "WEBSITE",
+        "OTHER"
+      ]
+    },
+    "source_status": {
+      "type": "string",
+      "enum": [
+        "APPROVED",
+        "TO_REVIEW",
+        "UNOFFICIAL"
+      ]
+    },
+    "repository_status": {
+      "type": "string",
+      "enum": [
+        "DELETED",
+        "ERROR",
+        "FETCHING",
+        "IDENTIFIED",
+        "HARVESTED",
+        "RECORDED",
+        "ENRICHED"
+      ]
+    },
+    "source_system": {
+      "type": "string"
+    },
+    "description": {
+      "type": "string"
+    },
+    "organizations": {
+      "description": "list of organizations of related to this source",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": true,
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "identifier of the ORG"
+          },
+          "name": {
+            "type": "string",
+            "description": "the name of the ORG"
+          },
+          "role": {
+            "type": "string",
+            "description": "the role of the organization"
+          }
+        }
+      }
+    },
+    "classifications": {
+      "description": "list of terms of related to this source",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": true,
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "identifier the term related to this source"
+          },
+          "description": {
+            "type": "string",
+            "description": "the name of the term related to this source"
+          },
+          "vocabulary": {
+            "type": "string",
+            "description": "the vocabulary of the classification"
+          }
+        }
+      }
+    },
+    "url": {
+      "type": "array",
+      "description": "A list of urls for the source , could be more than one",
+      "items": {
+        "type": "string"
+      }
+    },
+    "email": {
+      "type": "string"
+    },
+    "logo": {
+      "type": "string"
+    },
+    "seriadas_cubanas": {
+      "type": "string"
+    },
+    "start_year": {
+      "type": "string"
+    },
+    "end_year": {
+      "type": "string"
+    },
+    "subtitle": {
+      "type": "string"
+    },
+    "shortname": {
+      "type": "string"
+    },
+    "purpose": {
+      "type": "string"
+    },
+    "frequency": {
+      "type": "string"
+    },
+    "issn": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "p": {
+          "type": "string"
+        },
+        "e": {
+          "type": "string"
+        },
+        "l": {
+          "type": "string"
+        }
+      }
+    },
+    "rnps": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "p": {
+          "type": "string"
+        },
+        "e": {
+          "type": "string"
+        }
+      }
+    },
+    "_save_info": {
+      "description": "on save information",
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "user_id": {
+          "type": "string",
+          "description": "the user saving the source"
+        },
+        "comment": {
+          "type": "string",
+          "description": "any relevant comment"
+        },
+        "updated": {
+          "description": "date of the save",
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "_save_info_updated": {
+      "description": "date of the save",
+      "type": "string",
+      "format": "date-time"
+    }
+  }
+}
+
