@@ -1,0 +1,157 @@
+{
+    "name": "output_mapping",
+    "description": "Mapping outputs to a knowledge graph.",
+    "entities": [
+        {
+            "name": "Output",
+            "mapping": {
+                "required": [
+                    "identifiers",
+                    "id",
+                    "title",
+                    "source_repo",
+                    "creators",
+                    "description"
+                ],
+                "_class": "Output",
+                "properties": {
+                    "id": "id",
+                    "identifiers": {
+                        "__predicate": "idtype",
+                        "__object": "value",
+                        "idtype": "valuesOf:identifiers.idtype"
+                    },
+                    "source_repo": {
+                        "__relation": "uuid",
+                        "__predicate": "COLLECTED_FROM",
+                        "__target": "Source",
+                        "uuid": "id",
+                        "name": "name"
+                    },
+                    "spec": {
+                        "__relation": "name",
+                        "__predicate":"IN",
+                        "__target": "SetSpec",
+                        "code": "code",
+                        "name": "name"
+                    },
+                    "title": "title",
+                    "creators": {
+                        "__relation": "name",
+                        "__predicate":"CREATED_BY",
+                        "__target": "Author",
+                        "email": "email",
+                        "name": "name",
+                        "affiliations": "affiliations",
+                        "ids": {
+                            "source": "idtype",
+                            "value": "value"
+                        },
+                        "relation_properties":{
+                            "roles": "roles"
+                        }
+                        
+                    },
+                    "keywords": "keywords",
+                    "description": "description",
+                    "publisher": "publisher",
+                    "sources": "sources",
+                    "rights": "rights",
+                    "types": "types",
+                    "formats": "formats",
+                    "language": "language",
+                    "publication_date": "publication_date",
+                    "dates": {
+                        "date": "date",
+                        "info": "info"
+                    },
+                    "contributors": {
+                        "__relation": "name",
+                        "__predicate":"CREATED_BY",
+                        "__target": "Author",
+                        "email": "email",
+                        "name": "name",
+                        "affiliations": "affiliations",
+                        "ids": {
+                            "source": "idtype",
+                            "value": "value"
+                        },
+                        "relation_properties":{
+                            "roles": "roles"
+                        }
+                    },
+                    "references": "references",
+                    "organizations": {
+                        "__relation": "id",
+                        "__predicate": "RELATED_TO",
+                        "__target": "Organization",
+                        "id": "id",
+                        "name": "name",
+                        "relation_properties":{
+                            "role": "role"
+                        }
+                    },
+                    "classifications": {
+                        "__relation": "id",
+                        "__predicate": "CLASSIFIED_BY",
+                        "__target": "Term",
+                        "id": "id",
+                        "description": "description",
+                        "vocabulary": "vocabulary"
+                    },
+                    "status": "status"
+                },
+                "valuesOf": {
+                    "identifiers.idtype": {
+                        "ark": "identifier#ark",
+                        "arxiv": "identifier#arxiv",
+                        "doi": "identifier#doi",
+                        "bibcode": "identifier#bibcode",
+                        "ean8": "identifier#ean8",
+                        "ean13": "identifier#ean13",
+                        "handle": "identifier#handle",
+                        "isbn": "identifier#isbn",
+                        "issn_l": "identifier#issn_l",
+                        "issn_p": "identifier#issn_p",
+                        "issn_e": "identifier#issn_e",
+                        "issn_c": "identifier#issn_c",
+                        "issn_o": "identifier#issn_o",
+                        "istc": "identifier#istc",
+                        "lsid": "identifier#lsid",
+                        "pmid": "identifier#pmid",
+                        "pmcid": "identifier#pmcid",
+                        "purl": "identifier#purl",
+                        "upc": "identifier#upc",
+                        "url": "identifier#url",
+                        "urn": "identifier#urn",
+                        "orcid": "identifier#orcid",
+                        "dni": "identifier#dni",
+                        "scopid": "identifier#scopid",
+                        "hrid": "identifier#hrid",
+                        "passp": "identifier#passp",
+                        "gnd": "identifier#gnd",
+                        "ads": "identifier#ads",
+                        "oai": "identifier#oai",
+                        "prnps": "identifier#prnps",
+                        "ernps": "identifier#ernps",
+                        "oaiurl": "identifier#oaiurl",
+                        "grid": "identifier#grid",
+                        "wkdata": "identifier#wkdata",
+                        "ror": "identifier#ror",
+                        "isni": "identifier#isni",
+                        "fudref": "identifier#fudref",
+                        "orgref": "identifier#orgref",
+                        "reup": "identifier#reup",
+                        "orgaid": "identifier#orgaid",
+                        "uniid": "identifier#uniid",
+                        "sceibaid": "identifier#sceibaid",
+                        "irouid": "identifier#irouid",
+                        "srcid": "identifier#srcid",
+                        "orgid": "identifier#orgid",
+                        "perid": "identifier#perid"
+                    }
+                }
+            }
+        }
+    ]
+}

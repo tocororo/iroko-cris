@@ -120,50 +120,6 @@
     "description": {
       "type": "string"
     },
-    "organizations": {
-      "description": "list of organizations of related to this source",
-      "type": "array",
-      "items": {
-        "type": "object",
-        "additionalProperties": true,
-        "properties": {
-          "id": {
-            "type": "string",
-            "description": "identifier of the ORG"
-          },
-          "name": {
-            "type": "string",
-            "description": "the name of the ORG"
-          },
-          "role": {
-            "type": "string",
-            "description": "the role of the organization"
-          }
-        }
-      }
-    },
-    "classifications": {
-      "description": "list of terms of related to this source",
-      "type": "array",
-      "items": {
-        "type": "object",
-        "additionalProperties": true,
-        "properties": {
-          "id": {
-            "type": "string",
-            "description": "identifier the term related to this source"
-          },
-          "description": {
-            "type": "string",
-            "description": "the name of the term related to this source"
-          },
-          "vocabulary": {
-            "type": "string",
-            "description": "the vocabulary of the classification"
-          }
-        }
-      }
-    },
     "url": {
       "type": "array",
       "description": "A list of urls for the source , could be more than one",
@@ -249,6 +205,50 @@
       "description": "date of the save",
       "type": "string",
       "format": "date-time"
+    },
+    "organizations": {
+      "description": "list of organizations of related to this source",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": true,
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "identifier of the ORG"
+          },
+          "name": {
+            "type": "string",
+            "description": "the name of the ORG"
+          },
+          "role": {
+            "type": "string",
+            "description": "the role of the organization"
+          }
+        }
+      }
+    },
+    "classifications": {
+      "description": "list of terms of related to this source",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": true,
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "identifier the term related to this source"
+          },
+          "description": {
+            "type": "string",
+            "description": "the name of the term related to this source"
+          },
+          "vocabulary": {
+            "type": "string",
+            "description": "the vocabulary of the classification"
+          }
+        }
+      }
     }
   }
 }
