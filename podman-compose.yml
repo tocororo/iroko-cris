@@ -1,0 +1,87 @@
+version: '3.8'
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: iroko-api
+    hostname: api
+    ports:
+      - "8000:8000"
+    volumes:
+      - .:/app:Z
+    environment:
+      - NEO4J_URI=bolt://neo4j:7687
+      - NEO4J_USERNAME=neo4j
+      - NEO4J_PASSWORD=${NEO4J_PASSWORD}
+      - BASE_PATH=/api
+    depends_on:
+      neo4j:
+        condition: service_healthy
+    networks:
+      - iroko-net
+    restart: unless-stopped
+    security_opt:
+      - label=disable
+
+  neo4j:
+    image: quay.io/lib/neo4j:5
+    container_name: iroko-neo4j
+    hostname: neo4j
+    ports:
+      - "7474:7474"  # Browser interface
+      - "7687:7687"  # Bolt protocol
+    volumes:
+      - neo4j_data:/data:Z
+      - neo4j_logs:/logs:Z
+    environment:
+      - NEO4J_AUTH=neo4j/${NEO4J_PASSWORD}
+      - NEO4J_dbms_default__database=${NEO4J_DATABASE}
+      - NEO4J_ACCEPT_LICENSE_AGREEMENT=yes
+      - NEO4J_apoc_export_file_enabled=true
+      - NEO4J_apoc_import_file_enabled=true
+      - NEO4J_apoc_import_file_use__neo4j__config=true
+      - NEO4J_PLUGINS=["apoc","graph-data-science"]
+    healthcheck:
+      test: ["CMD", "cypher-shell", "-u", "neo4j", "-p", "${NEO4J_PASSWORD}", "RETURN 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - iroko-net
+    restart: unless-stopped
+    ulimits:
+      nofile:
+        soft: 40000
+        hard: 40000
+  haproxy:
+    image: quay.io/lib/haproxy:2.8
+    container_name: iroko-haproxy
+    ports:
+      - "80:80"
+      - "443:443"  # Add SSL later
+    volumes:
+      - ./haproxy:/usr/local/etc/haproxy:ro
+    depends_on:
+      - api
+    networks:
+      - iroko-net
+    restart: unless-stopped
+    user: root
+    cap_add:
+      - NET_BIND_SERVICE
+
+volumes:
+  neo4j_data:
+    driver: local
+  neo4j_logs:
+    driver: local
+
+networks:
+  iroko-net:
+    driver: bridge
+    ipam:
+      driver: default
+      config:
+        - subnet: 172.20.0.0/24

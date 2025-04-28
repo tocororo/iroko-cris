@@ -108,3 +108,4 @@ Thumbs.db
 capacitor.config.ts
 
 .data
+rsync.sh

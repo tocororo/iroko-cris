@@ -7,3 +7,21 @@
 - Neo4J
 - FastAPI
 - Angular
+
+## run dev
+
+```bash
+
+uvicorn api.main:app --reload --host 0.0.0.0 --port 8000
+
+```
+
+## podman
+
+podman-compose build --no-cache
+podman-compose down -v && podman-compose up -d
+
+
+podman exec iroko-api python /app/.data/map.py > map_execution.log 2>&1
+podman exec --user root iroko-api python /app/.data/map.py > map_execution.log 2>&1
+podman exec --user root iroko-api bash -c "nohup python /app/.data/map.py > /app/map_execution.log 2>&1 &"
