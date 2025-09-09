@@ -1,5 +1,5 @@
 from fastapi import Depends
-from api.database import neo4j_db
+from iroko.storage import neo4j_db
 import re
 
 import logging

@@ -14,3 +14,8 @@ Documentation of **iroko**.
   - graph explorer
   - node viewer
   - node editor
+
+
+## Descripcion general 
+
+Los 

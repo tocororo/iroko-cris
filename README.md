@@ -7,6 +7,8 @@
 - Neo4J
 - FastAPI
 - Angular
+https://typesense.org/docs/guide/syncing-data-into-typesense.html
+https://hub.researchgraph.org/typesense-and-neo4j-in-a-hybrid-information-retrieval-solution/
 
 ## run dev
 

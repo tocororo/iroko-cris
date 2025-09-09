@@ -1,5 +1,5 @@
 from fastapi import FastAPI
-from api.database import neo4j_db
+from iroko.storage import neo4j_db
 from api.routers import cypher
 from fastapi.middleware.cors import CORSMiddleware
 import os

@@ -15,7 +15,9 @@ dependencies = [
     "python-dotenv (>=1.1.0,<2.0.0)",
     "pydantic (>=2.11.3,<3.0.0)",
     "hd2neo4j (>=0.1.8,<0.2.0)",
-    "scikit-learn (>=1.6.1,<2.0.0)"
+    "scikit-learn (>=1.6.1,<2.0.0)",
+    "cruft (>=2.16.0,<3.0.0)",
+    "typesense (>=1.1.1,<2.0.0)",
 ]
 
 [tool.poetry.requires-plugins]
@@ -28,3 +30,5 @@ build-backend = "poetry.core.masonry.api"
 [tool.poetry.group.dev.dependencies]
 crawl4ai = "^0.5.0.post8"
 hd2neo4j = {path = "/home/malayo/dev/hd2neo4j", develop = true}
+flet = {extras = ["all"], version = "^0.28.3"}
+linkml = "^1.9.2"
