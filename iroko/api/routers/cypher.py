@@ -1,9 +1,9 @@
 from fastapi import APIRouter, HTTPException, Depends
 from neo4j import AsyncSession
-from api.schemas import CypherQuery
-from api.utils import validate_cypher_query
+from iroko.api.schemas import CypherQuery
+from iroko.api.utils import validate_cypher_query
 from iroko.storage import neo4j_db
-from api.utils import logger
+from iroko.api.utils import logger
 
 router = APIRouter()
 

@@ -957,44 +957,44 @@ typing = ["typing-extensions (>=4.12.2)"]
 
 [[package]]
 name = "flet"
-version = "0.28.3"
+version = "0.27.2"
 description = "Flet for Python - easily build interactive multi-platform apps in Python"
 optional = false
 python-versions = ">=3.9"
 groups = ["dev"]
 files = [
-    {file = "flet-0.28.3-py3-none-any.whl", hash = "sha256:649bfc4af7933956ecf44963df6c0d997bff9ceeaf89d3c86d96803840cab83e"},
+    {file = "flet-0.27.2-py3-none-any.whl", hash = "sha256:36464291d6f842c10dec7914b67ff5715d366a33aa49a8d9199b96fa91553c00"},
 ]
 
 [package.dependencies]
-flet-cli = {version = "0.28.3", optional = true, markers = "extra == \"all\" or extra == \"cli\""}
-flet-desktop = {version = "0.28.3", optional = true, markers = "(platform_system == \"Darwin\" or platform_system == \"Windows\") and (extra == \"all\" or extra == \"desktop\")"}
-flet-desktop-light = {version = "0.28.3", optional = true, markers = "platform_system == \"Linux\" and (extra == \"all\" or extra == \"desktop\")"}
-flet-web = {version = "0.28.3", optional = true, markers = "extra == \"all\" or extra == \"web\""}
+flet-cli = {version = "0.27.2", optional = true, markers = "extra == \"all\" or extra == \"cli\""}
+flet-desktop = {version = "0.27.2", optional = true, markers = "(platform_system == \"Darwin\" or platform_system == \"Windows\") and (extra == \"all\" or extra == \"desktop\")"}
+flet-desktop-light = {version = "0.27.2", optional = true, markers = "platform_system == \"Linux\" and (extra == \"all\" or extra == \"desktop\")"}
+flet-web = {version = "0.27.2", optional = true, markers = "extra == \"all\" or extra == \"web\""}
 httpx = {version = "*", markers = "platform_system != \"Pyodide\""}
 oauthlib = {version = ">=3.2.2,<4.0.0", markers = "platform_system != \"Pyodide\""}
 repath = ">=0.9.0,<0.10.0"
 
 [package.extras]
-all = ["flet-cli (==0.28.3)", "flet-desktop (==0.28.3)", "flet-desktop-light (==0.28.3)", "flet-web (==0.28.3)"]
-cli = ["flet-cli (==0.28.3)"]
-desktop = ["flet-desktop (==0.28.3)", "flet-desktop-light (==0.28.3)"]
-web = ["flet-web (==0.28.3)"]
+all = ["flet-cli (==0.27.2)", "flet-desktop (==0.27.2)", "flet-desktop-light (==0.27.2)", "flet-web (==0.27.2)"]
+cli = ["flet-cli (==0.27.2)"]
+desktop = ["flet-desktop (==0.27.2)", "flet-desktop-light (==0.27.2)"]
+web = ["flet-web (==0.27.2)"]
 
 [[package]]
 name = "flet-cli"
-version = "0.28.3"
+version = "0.27.2"
 description = "Flet CLI"
 optional = false
 python-versions = ">=3.9"
 groups = ["dev"]
 files = [
-    {file = "flet_cli-0.28.3-py3-none-any.whl", hash = "sha256:2759e4526472a32a584836cf926a9c3ba8fe6e363b4305454a759668d4fcad70"},
+    {file = "flet_cli-0.27.2-py3-none-any.whl", hash = "sha256:3cf4ce20bbf7f69e2c1a41fd9c32218393c3f7870ea6fff080596baaa6511ba0"},
 ]
 
 [package.dependencies]
 cookiecutter = ">=2.6.0,<3.0.0"
-flet = "0.28.3"
+flet = "0.27.2"
 packaging = "*"
 qrcode = ">=7.4.2,<8.0.0"
 toml = ">=0.10.2,<0.11.0"
@@ -1002,59 +1002,77 @@ watchdog = ">=4.0.0,<5.0.0"
 
 [[package]]
 name = "flet-desktop"
-version = "0.28.3"
+version = "0.27.2"
 description = "Flet Desktop client in Flutter"
 optional = false
 python-versions = ">=3.9"
 groups = ["dev"]
 markers = "platform_system == \"Darwin\" or platform_system == \"Windows\""
 files = [
-    {file = "flet_desktop-0.28.3-py3-none-macosx_10_14_x86_64.whl", hash = "sha256:6763b8e14863b0ee93e310720efa02202acae6d6ce8ff783663380f350f4f382"},
-    {file = "flet_desktop-0.28.3-py3-none-macosx_12_0_arm64.whl", hash = "sha256:89797a387e743808733f308c7faa1158ab768966180c0fc4207f3e95d3b25db3"},
-    {file = "flet_desktop-0.28.3-py3-none-manylinux2014_aarch64.manylinux_2_17_aarch64.whl", hash = "sha256:178f026f5c11555f06639ef96920b8f2e51281467543f7449f092a67878451d5"},
-    {file = "flet_desktop-0.28.3-py3-none-manylinux2014_x86_64.manylinux_2_17_x86_64.whl", hash = "sha256:539b33a0412e9ee17dccdf5f6ded99c48f1c390d6c8bb038b54e301833e56d0c"},
-    {file = "flet_desktop-0.28.3-py3-none-musllinux_1_2_aarch64.whl", hash = "sha256:99715d68ba0001ff0d17f5aa0d937a39d9eaa57ba93e6bbb206f0c17f0b0911e"},
-    {file = "flet_desktop-0.28.3-py3-none-musllinux_1_2_x86_64.whl", hash = "sha256:6825a5a6d3e513526692475c14c790ea6874f4aec0132710fd5b9a1c9b4499bf"},
-    {file = "flet_desktop-0.28.3-py3-none-win32.whl", hash = "sha256:dc24f57ba725b974b4795b46e35f2b5348c4843f5117e9fc18b25c4abfa5caf4"},
-    {file = "flet_desktop-0.28.3-py3-none-win_amd64.whl", hash = "sha256:35db313302fd4c376ba9be4d43f953a5c67d1ba99180dc6afee702699ed14749"},
-    {file = "flet_desktop-0.28.3.tar.gz", hash = "sha256:3e5db7b152de8cd3935e98eb39c162bf5c66f595d30c006f28d48d60e77a463d"},
+    {file = "flet_desktop-0.27.2-py3-none-macosx_10_14_x86_64.whl", hash = "sha256:46bd4f8a7af644363463e90ae2ed7ee76c085a7b9b9820c171fd0879fdeceded"},
+    {file = "flet_desktop-0.27.2-py3-none-macosx_12_0_arm64.whl", hash = "sha256:f7c1c12aa858666f4a04faa5c41b3a001b077426292d4f010e58a9c07a4498d7"},
+    {file = "flet_desktop-0.27.2-py3-none-manylinux2014_aarch64.manylinux_2_17_aarch64.whl", hash = "sha256:02ae9cbfe76492d41750624f01d07fb15e1655e7df43e819f87ba7dde0b643e0"},
+    {file = "flet_desktop-0.27.2-py3-none-manylinux2014_x86_64.manylinux_2_17_x86_64.whl", hash = "sha256:006850511b7d2117a0413eec4f845dd1c0b1f5d3b83a6a80462ad34c3de191f1"},
+    {file = "flet_desktop-0.27.2-py3-none-musllinux_1_2_aarch64.whl", hash = "sha256:bac9f70b5e960e6ae2366e2bff8ad1a2a71b78095047dfe0ca270897a94ce07f"},
+    {file = "flet_desktop-0.27.2-py3-none-musllinux_1_2_x86_64.whl", hash = "sha256:1c44aeef8f12cd22bd0b7d7172f7c80ace47b8d8ea9f711ad5b5a31f2fb48df1"},
+    {file = "flet_desktop-0.27.2-py3-none-win32.whl", hash = "sha256:66eb4923b16b8214bdee415e3b676f6b998f1c0d30ed3836b987fe0cc6c6efbe"},
+    {file = "flet_desktop-0.27.2-py3-none-win_amd64.whl", hash = "sha256:299472b28de100f4f1092a62df835d6ba64e50a4107397efdc5c43b507eafab3"},
+    {file = "flet_desktop-0.27.2.tar.gz", hash = "sha256:1f0b5901e6b679bd888aaf9fb52431748868e64930718702b0d2e5780fbbe880"},
 ]
 
 [package.dependencies]
-flet = "0.28.3"
+flet = "0.27.2"
 
 [[package]]
 name = "flet-desktop-light"
-version = "0.28.3"
+version = "0.27.2"
 description = "Flet Desktop client in Flutter"
 optional = false
 python-versions = ">=3.9"
 groups = ["dev"]
 markers = "platform_system == \"Linux\""
 files = [
-    {file = "flet_desktop_light-0.28.3-py3-none-manylinux2014_aarch64.manylinux_2_17_aarch64.whl", hash = "sha256:af6e53224bedd5c287c54ec3021ef3879abbba1265261a01e80badc3fbaddb86"},
-    {file = "flet_desktop_light-0.28.3-py3-none-manylinux2014_x86_64.manylinux_2_17_x86_64.whl", hash = "sha256:f3dc473aae8d6cf4270e59bbb51e819068c343a49a8836cced2d17fb0359a7f5"},
-    {file = "flet_desktop_light-0.28.3-py3-none-musllinux_1_2_aarch64.whl", hash = "sha256:d45647d68ce0aaf5418c938e8e02f404bbb8814ece504f7242730520c3697c47"},
-    {file = "flet_desktop_light-0.28.3-py3-none-musllinux_1_2_x86_64.whl", hash = "sha256:3090ca7c07392c76bd47ef29f79744c7d114edda466be5f675abc5f65f1f5be7"},
+    {file = "flet_desktop_light-0.27.2-py3-none-manylinux2014_aarch64.manylinux_2_17_aarch64.whl", hash = "sha256:51474935e5f5a7078061fddaddebad061def1cf892952f6fe8c73d3e864a5541"},
+    {file = "flet_desktop_light-0.27.2-py3-none-manylinux2014_x86_64.manylinux_2_17_x86_64.whl", hash = "sha256:ea462fdcee7887be6a6e57a2c1f59ddd81bfb9472ff00658081ec745335cdd5d"},
+    {file = "flet_desktop_light-0.27.2-py3-none-musllinux_1_2_aarch64.whl", hash = "sha256:80f51edb76baef62fb172cd1081559adc10f79be17969d3ea2bc6a057af19af7"},
+    {file = "flet_desktop_light-0.27.2-py3-none-musllinux_1_2_x86_64.whl", hash = "sha256:cad7304e376956abfbbcb6ae5a7c85e943a1525deac92f002aa9e3cb69beb862"},
 ]
 
 [package.dependencies]
-flet = "0.28.3"
+flet = "0.27.2"
+
+[[package]]
+name = "flet-model"
+version = "0.1.5"
+description = "A Model-based router for Flet applications that simplifies the creation of multi-page applications"
+optional = false
+python-versions = ">=3.7"
+groups = ["dev"]
+files = [
+    {file = "flet_model-0.1.5-py3-none-any.whl", hash = "sha256:be21028bfdce0aba69cf673f6acacf710b44e8e831365bb1f76c37385d474854"},
+    {file = "flet_model-0.1.5.tar.gz", hash = "sha256:4174d4f5130e1ebe641f0873ed6b72a43f6ec81888a53c6c91e44bee4315f712"},
+]
+
+[package.dependencies]
+flet = ">=0.10.0"
+
+[package.extras]
+dev = ["black", "build", "flake8", "isort", "mypy", "pytest (>=7.0.0)", "pytest-cov", "sphinx", "sphinx-rtd-theme", "twine"]
 
 [[package]]
 name = "flet-web"
-version = "0.28.3"
+version = "0.27.2"
 description = "Flet web client in Flutter."
 optional = false
 python-versions = ">=3.9"
 groups = ["dev"]
 files = [
-    {file = "flet_web-0.28.3-py3-none-any.whl", hash = "sha256:919c13f374e7cee539d29a8ccd6decb739528ef257c88e60af4df1ebab045bfb"},
+    {file = "flet_web-0.27.2-py3-none-any.whl", hash = "sha256:43e51d4a599aed69e74e72260971406c58d3cbeff13c730d78d0c6f6c8325a60"},
 ]
 
 [package.dependencies]
 fastapi = "*"
-flet = "0.28.3"
+flet = "0.27.2"
 uvicorn = {version = "*", extras = ["standard"]}
 
 [[package]]
@@ -1954,6 +1972,25 @@ extra-proxy = ["azure-identity (>=1.15.0,<2.0.0)", "azure-keyvault-secrets (>=4.
 proxy = ["PyJWT (>=2.8.0,<3.0.0)", "apscheduler (>=3.10.4,<4.0.0)", "backoff", "boto3 (==1.34.34)", "cryptography (>=43.0.1,<44.0.0)", "fastapi (>=0.115.5,<0.116.0)", "fastapi-sso (>=0.16.0,<0.17.0)", "gunicorn (>=23.0.0,<24.0.0)", "litellm-proxy-extras (==0.1.3)", "mcp (==1.5.0)", "orjson (>=3.9.7,<4.0.0)", "pynacl (>=1.5.0,<2.0.0)", "python-multipart (>=0.0.18,<0.0.19)", "pyyaml (>=6.0.1,<7.0.0)", "rq", "uvicorn (>=0.29.0,<0.30.0)", "uvloop (>=0.21.0,<0.22.0)", "websockets (>=13.1.0,<14.0.0)"]
 
 [[package]]
+name = "loguru"
+version = "0.7.3"
+description = "Python logging made (stupidly) simple"
+optional = false
+python-versions = "<4.0,>=3.5"
+groups = ["dev"]
+files = [
+    {file = "loguru-0.7.3-py3-none-any.whl", hash = "sha256:31a33c10c8e1e10422bfd431aeb5d351c7cf7fa671e3c4df004162264b28220c"},
+    {file = "loguru-0.7.3.tar.gz", hash = "sha256:19480589e77d47b8d85b2c827ad95d49bf31b0dcde16593892eb51dd18706eb6"},
+]
+
+[package.dependencies]
+colorama = {version = ">=0.3.4", markers = "sys_platform == \"win32\""}
+win32-setctime = {version = ">=1.0.0", markers = "sys_platform == \"win32\""}
+
+[package.extras]
+dev = ["Sphinx (==8.1.3)", "build (==1.2.2)", "colorama (==0.4.5)", "colorama (==0.4.6)", "exceptiongroup (==1.1.3)", "freezegun (==1.1.0)", "freezegun (==1.5.0)", "mypy (==v0.910)", "mypy (==v0.971)", "mypy (==v1.13.0)", "mypy (==v1.4.1)", "myst-parser (==4.0.0)", "pre-commit (==4.0.1)", "pytest (==6.1.2)", "pytest (==8.3.2)", "pytest-cov (==2.12.1)", "pytest-cov (==5.0.0)", "pytest-cov (==6.0.0)", "pytest-mypy-plugins (==1.9.3)", "pytest-mypy-plugins (==3.1.0)", "sphinx-rtd-theme (==3.0.2)", "tox (==3.27.1)", "tox (==4.23.2)", "twine (==6.0.1)"]
+
+[[package]]
 name = "lxml"
 version = "5.3.2"
 description = "Powerful and Pythonic XML processing library combining libxml2/libxslt with the ElementTree API."
@@ -2488,6 +2525,20 @@ files = [
 
 [package.dependencies]
 et-xmlfile = "*"
+
+[[package]]
+name = "owlready2"
+version = "0.48"
+description = "A package for ontology-oriented programming in Python: load OWL 2.0 ontologies as Python objects, modify them, save them, and perform reasoning via HermiT. Includes an optimized RDF quadstore."
+optional = false
+python-versions = ">=3.6"
+groups = ["main"]
+files = [
+    {file = "owlready2-0.48.tar.gz", hash = "sha256:86b4d8500d769a674c524b54397fdd738ff5d0a96878432b69f4d606d6a7a4d8"},
+]
+
+[package.extras]
+test = ["flask", "gevent", "rdflib"]
 
 [[package]]
 name = "packaging"
@@ -3844,6 +3895,64 @@ doc = ["intersphinx_registry", "jupyterlite-pyodide-kernel", "jupyterlite-sphinx
 test = ["Cython", "array-api-strict (>=2.0,<2.1.1)", "asv", "gmpy2", "hypothesis (>=6.30)", "meson", "mpmath", "ninja", "pooch", "pytest", "pytest-cov", "pytest-timeout", "pytest-xdist", "scikit-umfpack", "threadpoolctl"]
 
 [[package]]
+name = "sentry-sdk"
+version = "2.38.0"
+description = "Python client for Sentry (https://sentry.io)"
+optional = false
+python-versions = ">=3.6"
+groups = ["dev"]
+files = [
+    {file = "sentry_sdk-2.38.0-py2.py3-none-any.whl", hash = "sha256:2324aea8573a3fa1576df7fb4d65c4eb8d9929c8fa5939647397a07179eef8d0"},
+    {file = "sentry_sdk-2.38.0.tar.gz", hash = "sha256:792d2af45e167e2f8a3347143f525b9b6bac6f058fb2014720b40b84ccbeb985"},
+]
+
+[package.dependencies]
+certifi = "*"
+urllib3 = ">=1.26.11"
+
+[package.extras]
+aiohttp = ["aiohttp (>=3.5)"]
+anthropic = ["anthropic (>=0.16)"]
+arq = ["arq (>=0.23)"]
+asyncpg = ["asyncpg (>=0.23)"]
+beam = ["apache-beam (>=2.12)"]
+bottle = ["bottle (>=0.12.13)"]
+celery = ["celery (>=3)"]
+celery-redbeat = ["celery-redbeat (>=2)"]
+chalice = ["chalice (>=1.16.0)"]
+clickhouse-driver = ["clickhouse-driver (>=0.2.0)"]
+django = ["django (>=1.8)"]
+falcon = ["falcon (>=1.4)"]
+fastapi = ["fastapi (>=0.79.0)"]
+flask = ["blinker (>=1.1)", "flask (>=0.11)", "markupsafe"]
+grpcio = ["grpcio (>=1.21.1)", "protobuf (>=3.8.0)"]
+http2 = ["httpcore[http2] (==1.*)"]
+httpx = ["httpx (>=0.16.0)"]
+huey = ["huey (>=2)"]
+huggingface-hub = ["huggingface_hub (>=0.22)"]
+langchain = ["langchain (>=0.0.210)"]
+langgraph = ["langgraph (>=0.6.6)"]
+launchdarkly = ["launchdarkly-server-sdk (>=9.8.0)"]
+litestar = ["litestar (>=2.0.0)"]
+loguru = ["loguru (>=0.5)"]
+openai = ["openai (>=1.0.0)", "tiktoken (>=0.3.0)"]
+openfeature = ["openfeature-sdk (>=0.7.1)"]
+opentelemetry = ["opentelemetry-distro (>=0.35b0)"]
+opentelemetry-experimental = ["opentelemetry-distro"]
+pure-eval = ["asttokens", "executing", "pure_eval"]
+pymongo = ["pymongo (>=3.1)"]
+pyspark = ["pyspark (>=2.4.4)"]
+quart = ["blinker (>=1.1)", "quart (>=0.16.1)"]
+rq = ["rq (>=0.6)"]
+sanic = ["sanic (>=0.8)"]
+sqlalchemy = ["sqlalchemy (>=1.2)"]
+starlette = ["starlette (>=0.19.1)"]
+starlite = ["starlite (>=1.48)"]
+statsig = ["statsig (>=0.55.3)"]
+tornado = ["tornado (>=6)"]
+unleash = ["UnleashClient (>=6.0.1)"]
+
+[[package]]
 name = "shellingham"
 version = "1.5.4"
 description = "Tool to Detect Surrounding Shell"
@@ -4845,6 +4954,22 @@ files = [
 ]
 
 [[package]]
+name = "win32-setctime"
+version = "1.2.0"
+description = "A small Python utility to set file creation time on Windows"
+optional = false
+python-versions = ">=3.5"
+groups = ["dev"]
+markers = "sys_platform == \"win32\""
+files = [
+    {file = "win32_setctime-1.2.0-py3-none-any.whl", hash = "sha256:95d644c4e708aba81dc3704a116d8cbc974d70b3bdb8be1d150e36be6e9d1390"},
+    {file = "win32_setctime-1.2.0.tar.gz", hash = "sha256:ae1fdf948f5640aae05c511ade119313fb6a30d7eabe25fef9764dca5873c4c0"},
+]
+
+[package.extras]
+dev = ["black (>=19.3b0)", "pytest (>=4.6.2)"]
+
+[[package]]
 name = "wrapt"
 version = "1.17.2"
 description = "Module for decorators, wrappers and monkey patching."
@@ -5188,7 +5313,19 @@ enabler = ["pytest-enabler (>=2.2)"]
 test = ["big-O", "importlib-resources", "jaraco.functools", "jaraco.itertools", "jaraco.test", "more-itertools", "pytest (>=6,!=8.1.*)", "pytest-ignore-flaky"]
 type = ["pytest-mypy"]
 
+[[package]]
+name = "zxcvbn"
+version = "4.5.0"
+description = ""
+optional = false
+python-versions = "*"
+groups = ["dev"]
+files = [
+    {file = "zxcvbn-4.5.0-py2.py3-none-any.whl", hash = "sha256:2b6eed621612ce6d65e6e4c7455b966acee87d0280e257956b1f06ccc66bd5ff"},
+    {file = "zxcvbn-4.5.0.tar.gz", hash = "sha256:70392c0fff39459d7f55d0211151401e79e76fcc6e2c22b61add62900359c7c1"},
+]
+
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.12,<4.0"
-content-hash = "111e87666f7aded683e1502e5112df8f0555e2f4ce2045e3c96315589dbb381a"
+content-hash = "59e9ba5a0824ec676b9f2dfbe867c211d1b2848c927bfe7659c6afe3c9ff1d84"

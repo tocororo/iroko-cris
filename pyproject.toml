@@ -1,5 +1,5 @@
 [project]
-name = "iroko-cris"
+name = "iroko"
 version = "0.1.0"
 description = ""
 authors = [
@@ -18,6 +18,7 @@ dependencies = [
     "scikit-learn (>=1.6.1,<2.0.0)",
     "cruft (>=2.16.0,<3.0.0)",
     "typesense (>=1.1.1,<2.0.0)",
+    "owlready2 (>=0.48,<0.49)",
 ]
 
 [tool.poetry.requires-plugins]
@@ -30,5 +31,10 @@ build-backend = "poetry.core.masonry.api"
 [tool.poetry.group.dev.dependencies]
 crawl4ai = "^0.5.0.post8"
 hd2neo4j = {path = "/home/malayo/dev/hd2neo4j", develop = true}
-flet = {extras = ["all"], version = "^0.28.3"}
+flet = {extras = ["all"], version = "0.27.2"}
 linkml = "^1.9.2"
+loguru = "^0.7.3"
+sentry-sdk = "^2.38.0"
+flet-model = "^0.1.5"
+zxcvbn = "^4.5.0"
+httpx = "^0.28.1"
