@@ -3,9 +3,9 @@ from traceback import print_tb
 from fastapi import APIRouter, HTTPException, Depends
 from fastapi.responses import StreamingResponse
 from neo4j import AsyncSession
-from iroko.api.schemas import CypherQuery, FullTextCypherQuery
+from iroko.cypher.schemas import CypherQuery, FullTextCypherQuery
 from iroko.storage import neo4j_db
-from iroko.api.utils import validate_cypher_query
+from iroko.cypher.utils import validate_cypher_query
 import csv
 import io
 import logging
@@ -13,7 +13,7 @@ import logging
 import ast 
 logger = logging.getLogger('iroko-cris')
 
-router = APIRouter()
+router = APIRouter(prefix="/cypher", tags=["cypher"])
 
 # Constants
 MAX_EXPORT_ROWS = 100000

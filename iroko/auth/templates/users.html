@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Iroko - User Management</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        table { border-collapse: collapse; width: 100%; margin-top: 20px; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        th { background-color: #f2f2f2; }
+        .active { color: green; }
+        .inactive { color: red; }
+        .superuser { background-color: #fff3cd; }
+    </style>
+</head>
+<body>
+    <h1>User Management</h1>
+    <p>Logged in as: {{ current_user.email }}</p>
+    
+    <h2>Users</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>Email</th>
+                <th>Full Name</th>
+                <th>Status</th>
+                <th>Superuser</th>
+                <th>Roles</th>
+                <th>Created</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for user in users %}
+            <tr class="{% if user.is_superuser %}superuser{% endif %}">
+                <td>{{ user.email }}</td>
+                <td>{{ user.full_name or '-' }}</td>
+                <td class="{% if user.is_active %}active{% else %}inactive{% endif %}">
+                    {{ 'Active' if user.is_active else 'Inactive' }}
+                </td>
+                <td>{{ 'Yes' if user.is_superuser else 'No' }}</td>
+                <td>{{ user.roles | join(', ') }}</td>
+                <td>{{ user.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    
+    <h2>Available Roles</h2>
+    <ul>
+        {% for role in roles %}
+        <li><strong>{{ role.name }}</strong>: {{ role.description }} (Permissions: {{ role.permissions | join(', ') }})</li>
+        {% endfor %}
+    </ul>
+</body>
+</html>

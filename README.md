@@ -14,7 +14,7 @@ https://hub.researchgraph.org/typesense-and-neo4j-in-a-hybrid-information-retrie
 
 ```bash
 
-uvicorn api.main:app --reload --host 0.0.0.0 --port 8000
+uvicorn iroko.main:app --reload --host 0.0.0.0 --port 8000
 
 ```
 

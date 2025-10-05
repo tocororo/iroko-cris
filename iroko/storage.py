@@ -1,18 +1,18 @@
 from neo4j import AsyncGraphDatabase
 import os
-from dotenv import load_dotenv
+from iroko.config import app_settings  # Add this import
 
-load_dotenv()
+# Remove the dotenv import and update the Neo4jDB class:
 
 class Neo4jDB:
     def __init__(self):
         self._driver = AsyncGraphDatabase.driver(
-            os.getenv("NEO4J_URI"),
+            app_settings.neo4j_uri,  # Use app_settings
             auth=(
-                os.getenv("NEO4J_USERNAME"),
-                os.getenv("NEO4J_PASSWORD")
+                app_settings.neo4j_username,
+                app_settings.neo4j_password
             ),
-            database= os.getenv("NEO4J_DATABASE")
+            database=app_settings.neo4j_database
         )
     
     async def close(self):
@@ -21,6 +21,4 @@ class Neo4jDB:
     async def get_session(self):
         return self._driver.session()
 
-
 neo4j_db = Neo4jDB()
-
