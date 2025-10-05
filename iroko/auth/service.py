@@ -72,11 +72,35 @@ class UserService:
         if not user:
             return False
         
-        # Assign role
-        user.roles.append(role)
-        await self.db.commit()
-        return True
-    
+        # Use direct SQL approach to avoid relationship loading issues
+        from sqlalchemy import text
+        
+        # Check if relationship already exists
+        check_query = text("""
+            SELECT 1 FROM user_roles 
+            WHERE user_id = :user_id AND role_id = :role_id
+        """)
+        result = await self.db.execute(
+            check_query, 
+            {"user_id": user_id, "role_id": role.id}
+        )
+        existing = result.first()
+        
+        if not existing:
+            # Insert the relationship directly
+            insert_query = text("""
+                INSERT INTO user_roles (user_id, role_id) 
+                VALUES (:user_id, :role_id)
+            """)
+            await self.db.execute(
+                insert_query,
+                {"user_id": user_id, "role_id": role.id}
+            )
+            await self.db.commit()
+            return True
+        
+        return True  # Relationship already exists
+
     async def remove_role(self, user_id: uuid.UUID, role_name: str) -> bool:
         user = await self.get_user_by_id(user_id)
         if not user:
@@ -112,7 +136,48 @@ class UserService:
                 return True
         
         return False
-
+    async def get_user_with_roles(self, user_id: uuid.UUID) -> Optional[dict]:
+        """Get user with their roles loaded"""
+        from sqlalchemy.orm import selectinload
+        
+        result = await self.db.execute(
+            select(User)
+            .options(selectinload(User.roles))
+            .filter(User.id == user_id)
+        )
+        user = result.scalar_one_or_none()
+        
+        if not user:
+            return None
+        
+        return {
+            "id": user.id,
+            "email": user.email,
+            "full_name": user.full_name,
+            "is_active": user.is_active,
+            "is_superuser": user.is_superuser,
+            "created_at": user.created_at,
+            "updated_at": user.updated_at,
+            "roles": [role.name for role in user.roles]
+        }
+    
+    async def get_user_roles(self, user_id: uuid.UUID) -> List[str]:
+        """Get just the role names for a user"""
+        from sqlalchemy.orm import selectinload
+        
+        result = await self.db.execute(
+            select(User)
+            .options(selectinload(User.roles))
+            .filter(User.id == user_id)
+        )
+        user = result.scalar_one_or_none()
+        
+        if not user:
+            return []
+        
+        return [role.name for role in user.roles]
+    
+    
 class RoleService:
     def __init__(self, db: AsyncSession):
         self.db = db

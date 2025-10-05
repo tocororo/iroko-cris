@@ -52,3 +52,12 @@ class OAuthAccount(Base):
     expires_at = Column(DateTime)
     
     user = relationship("User")
+
+
+class CaptchaChallenge(Base):
+    __tablename__ = "captcha_challenges"
+    
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    text = Column(String(10), nullable=False)  # CAPTCHA text
+    expires_at = Column(DateTime(timezone=True), nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())

@@ -17,9 +17,14 @@ class UserUpdate(BaseModel):
     is_active: Optional[bool] = None
     password: Optional[str] = None
 
-class UserResponse(UserBase):
+
+class UserResponse(BaseModel):
     id: UUID
+    email: EmailStr
+    full_name: Optional[str] = None
+    is_active: bool
     is_superuser: bool
+    roles: List[str] = []  # Add roles here
     created_at: datetime
     updated_at: Optional[datetime]
     
@@ -27,7 +32,8 @@ class UserResponse(UserBase):
         from_attributes = True
 
 class UserWithRoles(UserResponse):
-    roles: List[str] = []
+    # This can now be the same as UserResponse or removed if not needed
+    pass
 
 class RoleBase(BaseModel):
     name: str
@@ -50,3 +56,21 @@ class Token(BaseModel):
 
 class TokenData(BaseModel):
     user_id: Optional[UUID] = None
+
+class TokenUser(BaseModel):
+    """User data extracted from JWT token"""
+    id: UUID
+    email: str
+    roles: List[str]
+    is_superuser: bool
+    
+    class Config:
+        from_attributes = True
+        
+class CaptchaResponse(BaseModel):
+    captcha_id: str
+    captcha_image: str  # Base64 encoded image
+    expires_at: datetime
+
+    class Config:
+        from_attributes = True

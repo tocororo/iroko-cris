@@ -6,14 +6,24 @@ from datetime import datetime, timedelta
 from typing import List, Optional
 import uuid
 
-from .schemas import UserCreate, UserResponse, UserWithRoles, Token, RoleCreate, RoleResponse
+import logging
+logger = logging.getLogger('iroko-cris')
+
+
+from .schemas import TokenUser, UserCreate, UserResponse, UserWithRoles, Token, RoleCreate, RoleResponse
 from .service import UserService, RoleService
 from .models import User
 from iroko.config import app_settings as auth_settings
 from .database import get_db_session
 from .service import pwd_context
+from .captcha_router import router as captcha_router  # Add this import
+
 
 router = APIRouter(prefix="/auth", tags=["authentication"])
+
+# Include CAPTCHA router
+router.include_router(captcha_router)
+
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="v1/auth/token")
 
@@ -27,14 +37,18 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     else:
         expire = datetime.utcnow() + timedelta(minutes=auth_settings.access_token_expire_minutes)
     
-    to_encode.update({"exp": expire})
+    to_encode.update({
+        "exp": expire,
+        "iat": datetime.utcnow(),  # issued at
+        "type": "access"
+    })
     encoded_jwt = jwt.encode(to_encode, auth_settings.secret_key, algorithm=auth_settings.algorithm)
     return encoded_jwt
 
 async def get_current_user(
     token: str = Depends(oauth2_scheme),
     db: AsyncSession = Depends(get_db_session)
-) -> User:
+) -> TokenUser:
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
@@ -43,16 +57,22 @@ async def get_current_user(
     try:
         payload = jwt.decode(token, auth_settings.secret_key, algorithms=[auth_settings.algorithm])
         user_id: str = payload.get("sub")
-        if user_id is None:
+        email: str = payload.get("email")
+        roles: List[str] = payload.get("roles", [])
+        is_superuser: bool = payload.get("is_superuser", False)
+        
+        if user_id is None or email is None:
             raise credentials_exception
+            
+        return TokenUser(
+            id=uuid.UUID(user_id),
+            email=email,
+            roles=roles,
+            is_superuser=is_superuser
+        )
+        
     except JWTError:
         raise credentials_exception
-    
-    user_service = UserService(db)
-    user = await user_service.get_user_by_id(uuid.UUID(user_id))
-    if user is None or not user.is_active:
-        raise credentials_exception
-    return user
 
 async def get_current_active_user(current_user: User = Depends(get_current_user)):
     if not current_user.is_active:
@@ -67,7 +87,47 @@ async def require_superuser(current_user: User = Depends(get_current_user)):
         )
     return current_user
 
-# Auth endpoints
+
+async def create_user_token(user_id: uuid.UUID, db: AsyncSession) -> Token:
+    """Helper function to create token for a user"""
+    user_service = UserService(db)
+    
+    # Get user with roles
+    user_with_roles = await user_service.get_user_with_roles(user_id)
+    if not user_with_roles:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found"
+        )
+    
+    # Create token data
+    token_data = {
+        "sub": str(user_with_roles["id"]),
+        "email": user_with_roles["email"],
+        "roles": user_with_roles["roles"],
+        "is_superuser": user_with_roles["is_superuser"]
+    }
+    
+    access_token = create_access_token(data=token_data)
+    
+    # Create user response
+    user_response = UserResponse(
+        id=user_with_roles["id"],
+        email=user_with_roles["email"],
+        full_name=user_with_roles["full_name"],
+        is_active=user_with_roles["is_active"],
+        is_superuser=user_with_roles["is_superuser"],
+        roles=user_with_roles["roles"],
+        created_at=user_with_roles["created_at"],
+        updated_at=user_with_roles["updated_at"]
+    )
+    
+    return Token(
+        access_token=access_token,
+        token_type="bearer",
+        user=user_response
+    )
+
 @router.post("/token", response_model=Token)
 async def login_for_access_token(
     form_data: OAuth2PasswordRequestForm = Depends(),
@@ -88,26 +148,10 @@ async def login_for_access_token(
             detail="Inactive user"
         )
     
-    access_token = create_access_token(data={"sub": str(user.id)})
-    
-    # Convert to response model
-    user_response = UserResponse(
-        id=user.id,
-        email=user.email,
-        full_name=user.full_name,
-        is_active=user.is_active,
-        is_superuser=user.is_superuser,
-        created_at=user.created_at,
-        updated_at=user.updated_at
-    )
-    
-    return {
-        "access_token": access_token, 
-        "token_type": "bearer",
-        "user": user_response
-    }
+    # Use helper function to create token
+    return await create_user_token(user.id, db)
 
-@router.post("/register", response_model=UserResponse)
+@router.post("/register", response_model=Token)
 async def register_user(
     user_data: UserCreate,
     db: AsyncSession = Depends(get_db_session)
@@ -122,25 +166,30 @@ async def register_user(
             detail="Email already registered"
         )
     
-    user = await user_service.create_user(
-        email=user_data.email,
-        password=user_data.password,
-        full_name=user_data.full_name
-    )
+    try:
+        # Create user
+        user = await user_service.create_user(
+            email=user_data.email,
+            password=user_data.password,
+            full_name=user_data.full_name
+        )
+        
+        # Assign default role (viewer)
+        success = await user_service.assign_role(user.id, "viewer")
+        if not success:
+            logger.warning(f"Failed to assign 'viewer' role to user {user.email}")
+        
+        # Use helper function to create token
+        return await create_user_token(user.id, db)
+        
+    except Exception as e:
+        logger.error(f"Error during user registration: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Registration failed"
+        )
     
-    # Assign default role (viewer)
-    await user_service.assign_role(user.id, "viewer")
     
-    return UserResponse(
-        id=user.id,
-        email=user.email,
-        full_name=user.full_name,
-        is_active=user.is_active,
-        is_superuser=user.is_superuser,
-        created_at=user.created_at,
-        updated_at=user.updated_at
-    )
-
 @router.get("/users", response_model=List[UserWithRoles])
 async def list_users(
     skip: int = Query(0, ge=0),
