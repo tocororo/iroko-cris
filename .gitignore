@@ -109,3 +109,7 @@ capacitor.config.ts
 
 .data
 rsync.sh
+.flattenignore
+CodeFlattened_Output
+.flatten_ignore
+/flattened

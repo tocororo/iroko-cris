@@ -14,3 +14,24 @@ class CypherQuery(BaseModel):
                 "readonly": True
             }
         }
+
+
+class FullTextCypherQuery(BaseModel):
+    searchIndex: str
+    searchTerm: str
+    whereClause:str = ''
+    orderClause: str = ''
+    returnClause: str = ''
+    parameters: Optional[Dict[str, Any]] = None
+    countTotal: bool = False
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "searchIndex": "OrganizationSearch",
+                "searchTerm": "Pinar",
+                "whereClause": "WHERE n.status = $status RETURN n LIMIT 10",
+                "parameters": {"status": "active"},
+                "readonly": True
+            }
+        }
