@@ -5,7 +5,7 @@ from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 import uuid
 
-Base = declarative_base()
+from iroko.database import Base  # Changed from local Base
 
 # Association table for many-to-many user-role relationship
 user_roles = Table(

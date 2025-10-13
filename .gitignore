@@ -108,7 +108,7 @@ Thumbs.db
 capacitor.config.ts
 
 .data
-rsync.sh
+rsync*
 .flattenignore
 CodeFlattened_Output
 .flatten_ignore

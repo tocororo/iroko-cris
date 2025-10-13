@@ -1,6 +1,5 @@
-import asyncio
 import logging
-from .database import init_db, get_db_session
+from iroko.database import get_db_session  # Use central database session
 from .service import UserService, RoleService
 from iroko.config import app_settings as auth_settings
 
@@ -9,8 +8,7 @@ logger = logging.getLogger('iroko-cris')
 async def initialize_auth_system():
     """Initialize the authentication system with default roles and admin user"""
     try:
-        # Initialize database tables
-        await init_db()
+        # Database tables are now initialized in main.py via init_db()
         
         # Create default roles and admin user
         async for db in get_db_session():

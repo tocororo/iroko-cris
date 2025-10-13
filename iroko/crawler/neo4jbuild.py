@@ -21,17 +21,17 @@ data:dict
 # with open('.data/rdf/persons.json', 'r') as f2:
 #     data = json.load(f2)
 
-# #organizations
-# with open('docs/schema/organization-v1.0.0-map.json', 'r') as file:
-#     config = json.load(file)
-# with open('.data/rdf/organizations.json', 'r') as f2:
-#     data = json.load(f2)
-
-#outputs
-with open('docs/schema/output-v1.0.0-map.json', 'r') as file:
+#organizations
+with open('docs/schema/organization-v1.0.0-map.json', 'r') as file:
     config = json.load(file)
-with open('.data/rdf/outputs.json', 'r') as f2:
+with open('.data/rdf/organizations.json', 'r') as f2:
     data = json.load(f2)
+
+# #outputs
+# with open('docs/schema/output-v1.0.0-map.json', 'r') as file:
+#     config = json.load(file)
+# with open('.data/rdf/outputs.json', 'r') as f2:
+#     data = json.load(f2)
 
 
 m_service: MapperService = MapperService(

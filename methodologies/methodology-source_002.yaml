@@ -1,0 +1,89 @@
+
+#Metodología de evaluación de revistas de Sceiba en espannol
+
+id: 'm_002'
+name: 'CITMA'
+version: '0.1.0'
+description: 'Metodologia del CITMA para la evaluacion de revistas cientificas'
+entity: Source
+sections:
+
+  #Visibility Section
+  - title: 'Visibilidad'
+    description: 'Indicador de Visibilidad'
+    id: 'm_001_01'
+    categories:
+
+      - title: 'Indización'
+        id: 'm_001_01_01'
+        questions:
+          - c_001_q_001
+          - c_001_q_002
+          - c_001_q_003
+          - c_001_q_004
+
+      - title: 'Acceso'
+        id: 'm_001_01_02'
+        questions:
+          - c_002_q_001
+          - c_002_q_002
+          - c_002_q_003
+          - c_002_q_004
+          - c_002_q_005
+            
+
+      - title: 'Interoperabilidad'
+        id: 'm_001_01_03'
+        questions: 
+          - c_003_q_001
+          - c_003_q_002
+          - c_003_q_003
+          - c_003_q_004
+          - c_003_q_005
+          - c_003_q_006
+          - c_003_q_007
+          - c_003_q_008
+        
+      - title: 'Apertura'
+        id: 'm_001_01_04'
+        questions:
+          - c_004_q_001
+          - c_004_q_002
+          - c_004_q_003
+          - c_004_q_004
+          - c_004_q_005
+
+      - title: 'Internacionalización'
+        id: 'm_001_01_05'
+        questions:
+          - c_005_q_001     
+          - c_005_q_002
+          - c_005_q_003
+          - c_005_q_004
+          - c_005_q_005
+          - c_005_q_006
+
+      - title: 'Redes sociales'
+        id: 'm_001_01_06'
+        questions:
+          - c_006_q_001
+          - c_006_q_002
+          - c_006_q_003
+  
+  # Impact Section
+  - title: 'Impacto'
+    description: 'Indicador de Impacto'
+    id: 'm_001_02'
+    categories:
+
+      - title: 'Impacto académico'
+        id: 'm_001_02_01'
+        questions:
+          - c_007_q_001
+          - c_007_q_002
+          - c_007_q_003
+
+      - title: 'Posición en rankings de revistas'
+        id: 'm_001_02_02'
+        questions: 
+          - c_008_q_001

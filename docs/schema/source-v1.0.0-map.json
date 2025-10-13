@@ -44,7 +44,7 @@
                     },
                     "organizations": {
                         "__relation": "id",
-                        "__predicate": "RELATED_TO",
+                        "__predicate": "SOURCE_CREATED_IN",
                         "__target": "Organization",
                         "id": "id",
                         "name": "name",

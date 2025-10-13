@@ -14,7 +14,7 @@ from .schemas import TokenUser, UserCreate, UserResponse, UserWithRoles, Token, 
 from .service import UserService, RoleService
 from .models import User
 from iroko.config import app_settings as auth_settings
-from .database import get_db_session
+from iroko.database import get_db_session
 from .service import pwd_context
 from .captcha_router import router as captcha_router  # Add this import
 

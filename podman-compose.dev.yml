@@ -39,12 +39,12 @@ services:
       - postgres_data:/var/lib/postgresql/data:Z
       - ./initdb:/docker-entrypoint-initdb.d:Z
     environment:
-      - POSTGRES_DB=${POSTGRES_DB:-iroko_auth}
+      - POSTGRES_DB=${POSTGRES_DB:-iroko}
       - POSTGRES_USER=${POSTGRES_USER:-iroko_user}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-iroko_password}
       - POSTGRES_HOST_AUTH_METHOD=trust
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-iroko_user} -d ${POSTGRES_DB:-iroko_auth}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-iroko_user} -d ${POSTGRES_DB:-iroko}"]
       interval: 10s
       timeout: 5s
       retries: 5

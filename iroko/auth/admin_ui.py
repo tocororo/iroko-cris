@@ -4,7 +4,7 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy.ext.asyncio import AsyncSession
 from .router import get_current_user, require_superuser
 from .service import UserService, RoleService
-from .database import get_db_session
+from iroko.database import get_db_session
 from .models import User
 import os
 

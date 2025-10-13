@@ -4,7 +4,7 @@ from datetime import datetime
 
 from .schemas import CaptchaResponse
 from .captcha_service import CaptchaService
-from .database import get_db_session
+from iroko.database import get_db_session
 
 router = APIRouter(prefix="/captcha", tags=["captcha"])
 

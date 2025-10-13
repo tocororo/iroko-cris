@@ -15,15 +15,15 @@ class AppSettings(BaseSettings):
     neo4j_database: str = "iroko"
     
     # PostgreSQL Settings
-    postgres_db: str = "iroko_auth"
+    postgres_db: str = "iroko"
     postgres_user: str = "iroko_user"
     postgres_password: str = "iroko_password"
-    database_url: str = "postgresql+asyncpg://iroko_user:iroko_password@postgres/iroko_auth"
+    database_url: str = "postgresql+asyncpg://iroko_user:iroko_password@postgres/iroko"
     
     # JWT Settings
     secret_key: str = "your-secret-key-change-in-production"
     algorithm: str = "HS256"
-    access_token_expire_minutes: int = 30
+    access_token_expire_minutes: int = 3000
     
     # CORS
     cors_origins: List[str] = ["http://localhost:3000", "http://localhost:8000"]
