@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession as SQLAsyncSession
 from uuid import UUID
 
 from iroko.auth.models import User
+from iroko.auth.service import UserService
 
 from .schemas import *
 from .models import EvaluationRecord
@@ -110,11 +111,6 @@ class EvaluationService:
         context = await self.create_evaluation_context(
                 methodology_id=result.methodology.id, node_id= result.node_id, user_id= user_id, neo4j_session=neo4j_session)
         context.answers = result.question_data
-        logger.debug('-==-=-=-=-=-=-==-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=')
-        logger.debug('-==-=-=-=-=-=-==-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=')
-        logger.debug(context)
-        logger.debug('-==-=-=-=-=-=-==-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=')
-        logger.debug('-==-=-=-=-=-=-==-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=')
         # Step 2: Evaluate categories
         await self._evaluate_categories(context, result)
         
@@ -240,7 +236,7 @@ class EvaluationService:
         return node_data
     
     async def store_evaluation(self, db_session: SQLAsyncSession,
-                             evaluation: EvaluationResult, user_id: UUID) -> EvaluationRecord:
+                             evaluation: EvaluationResult, user_id: UUID) -> StoredEvaluation:
         """Store evaluation result in database"""
         record = EvaluationRecord(
             node_id=evaluation.node_id,
@@ -254,8 +250,30 @@ class EvaluationService:
         db_session.add(record)
         await db_session.commit()
         await db_session.refresh(record)
-        
-        return StoredEvaluation.model_validate(record)
+        user_service = UserService(db_session)
+        user = await user_service.get_user_by_id(user_id=user_id)
+        user_data = {
+                "id": user.id,
+                "email": user.email,
+                "full_name": user.full_name,
+                "is_active": user.is_active,
+                "is_superuser": user.is_superuser,
+                "created_at": user.created_at,
+                "updated_at": user.updated_at,
+                # "roles": u.roles
+                # Map other user fields as needed
+            }
+        record_dict = {
+                "id": record.id,
+                "node_id": record.node_id,
+                "user_id": record.user_id,
+                "methodology_id": record.methodology_id,
+                "timestamp": record.timestamp,
+                "evaluation_data": record.evaluation_data,
+                "is_complete": record.is_complete,
+                "user": user_data 
+            }
+        return StoredEvaluation.model_validate(record_dict)
 
     async def get_evaluation_history(self, db_session: SQLAsyncSession,
                                     node_id: str, methodology_id: Optional[str] = None) -> List[StoredEvaluation]:

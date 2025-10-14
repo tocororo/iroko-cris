@@ -24,7 +24,7 @@ class UserResponse(BaseModel):
     full_name: Optional[str] = None
     is_active: bool
     is_superuser: bool
-    roles: List[str] = []  # Add roles here
+    roles: List[str] = [] 
     created_at: datetime
     updated_at: Optional[datetime]
     
