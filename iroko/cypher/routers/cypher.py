@@ -119,7 +119,9 @@ async def _export_csv(result):
     parsed_records = []
     for r in records:
         if len(r.keys()) != 1:
-            print('AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA')
+            logger.debug('============ ERROR ============')
+            logger.debug(r)
+            logger.debug('============ ERROR ============')
         parsed_records.append(r.get('n'))
         # if isinstance(r, str):
         #     try:
