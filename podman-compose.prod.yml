@@ -1,0 +1,127 @@
+version: '3.8'
+
+services:
+
+  postgres:
+    image: docker.uclv.cu/postgres:16-alpine
+    hostname: postgres
+    environment:
+      - POSTGRES_DB=${POSTGRES_DB}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_INITDB_ARGS=--encoding=UTF8
+    volumes:
+      - postgres_data:/var/lib/postgresql/data:Z
+      - ./initdb:/docker-entrypoint-initdb.d:Z
+    networks:
+      - iroko-net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  neo4j:
+    image: docker.uclv.cu/neo4j:5.22-community
+    hostname: neo4j
+    environment:
+      - NEO4J_AUTH=neo4j/${NEO4J_PASSWORD}
+      - NEO4J_initial.dbms.default_database=${NEO4J_DATABASE}
+      - NEO4J_ACCEPT_LICENSE_AGREEMENT=yes
+      - NEO4J_dbms_security_procedures_unrestricted=apoc.*
+      - NEO4J_dbms_security_procedures_allowlist=apoc.*
+      - NEO4J_PLUGINS=["apoc"]
+      - NEO4J_server.bolt.listen_address=:7687
+      - NEO4J_server.http.listen_address=:7474
+    volumes:
+      - neo4j_data:/data:Z
+      - neo4j_logs:/logs:Z
+      - neo4j_plugins:/plugins:Z
+    networks:
+      - iroko-net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "cypher-shell", "-u", "neo4j", "-p", "${NEO4J_PASSWORD}", "RETURN 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    ulimits:
+      nofile:
+        soft: 40000
+        hard: 40000
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        - APP_ENV=production
+    image: iroko/api:prod
+    hostname: api
+    environment:
+      - APP_ENV=production
+      - BASE_PATH=/api
+      - NEO4J_URI=bolt://neo4j:7687
+      - NEO4J_USERNAME=neo4j
+      - NEO4J_PASSWORD=${NEO4J_PASSWORD}
+      - NEO4J_DATABASE=${NEO4J_DATABASE}
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres/${POSTGRES_DB}
+      - SECRET_KEY=${SECRET_KEY}
+    depends_on:
+      - neo4j
+      - postgres
+    networks:
+      - iroko-net
+    restart: unless-stopped
+    security_opt:
+      - label=disable
+    init: true
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid
+
+  frontend:
+    build:
+      context: ./iroko-ui  # Adjust path to your frontend repository
+      dockerfile: Dockerfile
+    image: iroko/frontend:prod
+    hostname: frontend
+    networks:
+      - iroko-net
+    restart: unless-stopped
+    init: true
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid
+    depends_on:
+      - api
+
+  haproxy:
+    image: docker.uclv.cu/haproxy:2.8-alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./haproxy:/usr/local/etc/haproxy:ro,Z
+      - ./ssl:/etc/ssl/private:ro,Z
+    depends_on:
+      - api
+      - frontend
+    networks:
+      - iroko-net
+    restart: unless-stopped
+
+volumes:
+  neo4j_data:
+    driver: local
+  neo4j_logs:
+    driver: local
+  neo4j_plugins:
+    driver: local
+  postgres_data:
+    driver: local
+
+networks:
+  iroko-net:
+    driver: bridge

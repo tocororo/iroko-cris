@@ -56,4 +56,4 @@ if [ $COUNT -eq $MAX_RETRIES ]; then
 fi
 
 # Start FastAPI
-exec uvicorn api.main:app --host 0.0.0.0 --port 8000
+exec uvicorn iroko.main:app --host 0.0.0.0 --port 8000

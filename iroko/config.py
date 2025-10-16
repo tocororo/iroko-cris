@@ -26,12 +26,23 @@ class AppSettings(BaseSettings):
     access_token_expire_minutes: int = 3000
     
     # CORS
-    cors_origins: List[str] = ["http://localhost:3000", "http://localhost:8000"]
-    
+    # cors_origins: List[str] = ["http://localhost:3000", "http://localhost:8000"]
+            
+    cors_origins: List[str] = [
+            "http://localhost:3000",
+            "http://localhost:8000",
+            "http://localhost:4200",
+            "http://localhost:8080"
+        ]
+
+
     # Admin User (for initial setup)
     admin_email: Optional[str] = "admin@iroko.cu"
     admin_password: Optional[str] = "admin123"
     admin_full_name: Optional[str] = "System Administrator"
+
+    log_to_file: bool = True
+    log_file_path: str = "iroko.log"
     
     class Config:
         env_file = ".env"

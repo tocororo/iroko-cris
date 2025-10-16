@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 from contextlib import asynccontextmanager
+from iroko import health
 from iroko.storage import neo4j_db
 from iroko.cypher.routers import cypher
 from iroko.auth.router import router as auth_router
@@ -57,6 +58,9 @@ app.add_middleware(
 )
 
 # Include routers
+
+app.include_router(health.router, prefix="/v1")
+
 app.include_router(cypher.router, prefix="/v1")
 app.include_router(auth_router, prefix="/v1")
 app.include_router(evals_router, prefix="/v1")

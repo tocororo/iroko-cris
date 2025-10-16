@@ -107,9 +107,12 @@ Thumbs.db
 .angular
 capacitor.config.ts
 
-.data
+.data*
 rsync*
 .flattenignore
 CodeFlattened_Output
 .flatten_ignore
 /flattened
+deploy*.sh
+.env*
+ansible*.yml
