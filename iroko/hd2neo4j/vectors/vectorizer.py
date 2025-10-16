@@ -1,8 +1,8 @@
 from iroko.hd2neo4j.types.mapper_types import VectorStrategies
 from iroko.hd2neo4j.vectors.strategies.bag_of_words import BagOfWords
-# from iroko.hd2neo4j.vectors.strategies.sentence_transformer import (
-#     TransformerVectorizer,
-# )
+from iroko.hd2neo4j.vectors.strategies.sentence_transformer import (
+    TransformerVectorizer,
+)
 import logging
 import importlib.util
 
@@ -22,7 +22,7 @@ class VectorManager:
                     "Use 'pip install hd2neo4j[ve-de]' to install them or 'pip install hd2neo4j[ve-full]' for all supported strategies."
                 )
                 return
-            return data #TransformerVectorizer().vectorize(data)
+            return TransformerVectorizer().vectorize(data)
 
         elif self.strategy == VectorStrategies.BoW.value:
             if importlib.util.find_spec("sklearn") is None:

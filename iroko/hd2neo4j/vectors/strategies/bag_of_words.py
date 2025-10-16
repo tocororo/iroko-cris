@@ -1,4 +1,4 @@
-from sklearn.feature_extraction.text import CountVectorizer
+# from sklearn.feature_extraction.text import CountVectorizer
 
 
 class Singleton:
@@ -7,7 +7,8 @@ class Singleton:
     def __new__(cls):
         if not cls._instance:
             cls._instance = super().__new__(cls)
-            cls._instance.vectorizer = CountVectorizer()
+            # cls._instance.vectorizer = CountVectorizer()
+            cls._instance.vectorizer = None
         return cls._instance
 
 
