@@ -6,8 +6,13 @@ from .schemas import CaptchaResponse
 from .captcha_service import CaptchaService
 from iroko.database import get_db_session
 
-router = APIRouter(prefix="/captcha", tags=["captcha"])
+import logging
 
+logger = logging.getLogger("iroko-cris")
+
+router = APIRouter(prefix="/captcha")
+
+@router.get("", response_model=CaptchaResponse)
 @router.get("/", response_model=CaptchaResponse)
 async def generate_captcha(
     db: AsyncSession = Depends(get_db_session)
@@ -15,25 +20,24 @@ async def generate_captcha(
     """
     Generate a new CAPTCHA challenge
     """
-    try:
-        captcha_service = CaptchaService(db)
-        captcha_id, captcha_text, base64_image = await captcha_service.generate_captcha()
+    # try:
+    captcha_service = CaptchaService(db)
+    captcha_id, captcha_text, base64_image = await captcha_service.generate_captcha()
+    
+    # Get expiry time (10 minutes from now)
+    expires_at = datetime.utcnow().replace(microsecond=0)
+    
+    return CaptchaResponse(
+        captcha_id=captcha_id,
+        captcha_image=f"data:image/png;base64,{base64_image}",
+        expires_at=expires_at
+    )
         
-        print(captcha_id, captcha_text)
-        # Get expiry time (10 minutes from now)
-        expires_at = datetime.utcnow().replace(microsecond=0)
-        
-        return CaptchaResponse(
-            captcha_id=captcha_id,
-            captcha_image=f"data:image/png;base64,{base64_image}",
-            expires_at=expires_at
-        )
-        
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to generate CAPTCHA"
-        )
+    # except Exception as e:
+    #     raise HTTPException(
+    #         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+    #         detail="Failed to generate CAPTCHA"
+    #     )
 
 @router.post("/validate")
 async def validate_captcha(

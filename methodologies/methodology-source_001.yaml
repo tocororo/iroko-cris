@@ -15,7 +15,7 @@ sections:
     categories:
 
       - title: 'Indización'
-        id: 'm_001_01_01'
+        id: 'm_001_indizacion'
         questions:
           - c_001_q_001
           - c_001_q_002
@@ -23,7 +23,7 @@ sections:
           - c_001_q_004
 
       - title: 'Acceso'
-        id: 'm_001_01_02'
+        id: 'm_001_acceso'
         questions:
           - c_002_q_001
           - c_002_q_002
@@ -33,7 +33,7 @@ sections:
             
 
       - title: 'Interoperabilidad'
-        id: 'm_001_01_03'
+        id: 'm_001_interoperabilidad'
         questions: 
           - c_003_q_001
           - c_003_q_002
@@ -45,7 +45,7 @@ sections:
           - c_003_q_008
         
       - title: 'Apertura'
-        id: 'm_001_01_04'
+        id: 'm_001_apertura'
         questions:
           - c_004_q_001
           - c_004_q_002
@@ -54,7 +54,7 @@ sections:
           - c_004_q_005
 
       - title: 'Internacionalización'
-        id: 'm_001_01_05'
+        id: 'm_001_internacionalizacion'
         questions:
           - c_005_q_001     
           - c_005_q_002
@@ -64,7 +64,7 @@ sections:
           - c_005_q_006
 
       - title: 'Redes sociales'
-        id: 'm_001_01_06'
+        id: 'm_001_redes_sociales'
         questions:
           - c_006_q_001
           - c_006_q_002
@@ -77,13 +77,13 @@ sections:
     categories:
 
       - title: 'Impacto académico'
-        id: 'm_001_02_01'
+        id: 'm_001_impacto_academico'
         questions:
           - c_007_q_001
           - c_007_q_002
           - c_007_q_003
 
       - title: 'Posición en rankings de revistas'
-        id: 'm_001_02_02'
+        id: 'm_001_posicion_rankings'
         questions: 
           - c_008_q_001

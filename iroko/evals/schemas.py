@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator, validator
 from typing import Dict, List, Optional, Any, Union
 from enum import Enum
 from uuid import UUID
@@ -13,8 +13,16 @@ class QuestionType(str, Enum):
 
 class Answer(BaseModel):
     result: Optional[Union[bool, float, str]] = None
-    recommendation: Optional[str] = None
+    recommendation: Optional[List[str]] = None
     user_id: Optional[UUID] = None
+
+    @field_validator('result')
+    def result_validator(cls, v):
+        if isinstance(v, str):
+            if v.lower() in ('true', 'false'):
+                return v.lower() == 'true'
+        return v
+
 
 class Question(BaseModel):
     id: str

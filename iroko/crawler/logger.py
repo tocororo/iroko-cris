@@ -18,7 +18,7 @@ class ColorFormatter(logging.Formatter):
         message = super().format(record)
         return f"{color}{message}{self.RESET}" if color else message
 
-def setup_logger(name='my_logger', log_file='app.log'):
+def setup_logger(name='iroko-cris', log_file='app.log'):
     
     logger = logging.getLogger(name)
     logger.setLevel(logging.DEBUG)

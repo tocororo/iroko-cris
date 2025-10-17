@@ -33,7 +33,7 @@ class EvaluationEngine:
                     return None
                 
                 # Execute rule
-                result = await rule_def.func(context.node_data, neo4j_session)
+                result = await rule_def.func(context, neo4j_session)
                 
                 # Cache result
                 if rule_def.cacheable:
@@ -49,7 +49,7 @@ class EvaluationEngine:
         return None
     
     async def evaluate_category(self, category_id: str, context: EvaluationContext,
-                              category_config: Dict) -> Answer:
+                              neo4j_session: AsyncSession) -> Answer:
         """Evaluate a category using registered rules"""
         if category_id in self.rules.category_rules:
             try:
@@ -61,7 +61,7 @@ class EvaluationEngine:
                     return None
                 
                 # Execute category rule
-                result = await rule_def.func(category_config, context.answers)
+                result = await rule_def.func(context, neo4j_session)
                 context.category_results[category_id] = result
                 return result
                 
@@ -73,7 +73,7 @@ class EvaluationEngine:
         return None
     
     async def evaluate_section(self, section_id: str, context: EvaluationContext,
-                             section_config: Dict)  -> Answer:
+                             neo4j_session: AsyncSession)  -> Answer:
         """Evaluate a section using registered rules"""
         if section_id in self.rules.section_rules:
             try:
@@ -86,7 +86,7 @@ class EvaluationEngine:
                     return None
                 
                 # Execute section rule
-                result = await rule_def.func(section_config, context.category_results)
+                result = await rule_def.func(context, neo4j_session)
                 context.section_results[section_id] = result
                 return result
                 
@@ -98,7 +98,7 @@ class EvaluationEngine:
         return None
     
     async def evaluate_methodology(self, methodology_id: str, context: EvaluationContext,
-                                 methodology_config: Dict) -> Answer:
+                                 neo4j_session: AsyncSession) -> Answer:
         """Evaluate methodology using registered rules"""
         if methodology_id in self.rules.methodology_rules:
             try:
@@ -111,7 +111,7 @@ class EvaluationEngine:
                     return None
                 
                 # Execute methodology rule
-                return await rule_def.func(methodology_config, context.section_results)
+                return await rule_def.func(context, neo4j_session)
                 
             except Exception as e:
                 logger.error(f"Error evaluating methodology {methodology_id}: {e}")

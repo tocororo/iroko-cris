@@ -10,9 +10,10 @@ import asyncio
 from crawl4ai import AsyncWebCrawler, BrowserConfig, CacheMode, CrawlerRunConfig
 from crawl4ai.extraction_strategy import JsonXPathExtractionStrategy
 
-from logger import setup_logger
+import logging
 
-logger = setup_logger(__name__, f"{__name__}.log")
+
+logger = logging.getLogger("iroko-cris")
 
 def write_file(path: str, response: requests.Response) -> None:
     """

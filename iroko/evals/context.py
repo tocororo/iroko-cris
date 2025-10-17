@@ -4,6 +4,8 @@ from typing import Dict, Any, Optional
 from uuid import UUID
 import logging
 
+from iroko.evals.schemas import Answer
+
 logger = logging.getLogger('iroko-cris')
 
 @dataclass
@@ -12,25 +14,25 @@ class EvaluationContext:
     node_data: Dict[str, Any]
     methodology_id: str
     user_id: UUID
-    answers: Dict[str, Any] = field(default_factory=dict)
-    category_results: Dict[str, Any] = field(default_factory=dict)
-    section_results: Dict[str, Any] = field(default_factory=dict)
-    intermediate_cache: Dict[str, Any] = field(default_factory=dict)
+    answers: Dict[str, Answer] = field(default_factory=dict)
+    category_results: Dict[str, Answer] = field(default_factory=dict)
+    section_results: Dict[str, Answer] = field(default_factory=dict)
+    intermediate_cache: Dict[str, Answer] = field(default_factory=dict)
     
-    def get_answer(self, question_id: str) -> Any:
+    def get_answer(self, question_id: str) -> Answer:
         """Get answer for a question, checking cache first"""
         return self.answers.get(question_id)
     
-    def set_answer(self, question_id: str, value: Any):
+    def set_answer(self, question_id: str, value: Answer):
         """Set answer for a question"""
         self.answers[question_id] = value
         logger.debug(f"Set answer for {question_id}: {value}")
     
-    def get_cached_value(self, key: str) -> Any:
+    def get_cached_value(self, key: str) -> Answer:
         """Get value from intermediate cache"""
         return self.intermediate_cache.get(key)
     
-    def set_cached_value(self, key: str, value: Any):
+    def set_cached_value(self, key: str, value: Answer):
         """Set value in intermediate cache"""
         self.intermediate_cache[key] = value
     

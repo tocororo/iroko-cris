@@ -8,65 +8,67 @@ r_service: RepositoryService = RepositoryService(
 )
 
 
-config:dict
-data:dict
-
-# sources
-with open('docs/schema/source-v1.0.0-map.json', 'r') as file:
-    config = json.load(file)
-with open('.data-init/sources.json', 'r') as f2:
-    data = json.load(f2)
-
-
-m_service: MapperService = MapperService(
-    mapping_config=config,
-    repository_service=r_service,
-    data_to_map=data
-)
-
-m_service.start_mapping()
-
-# #persons
-with open('docs/schema/person-v1.0.0-map.json', 'r') as file:
-    config = json.load(file)
-with open('.data-init/persons.json', 'r') as f2:
-    data = json.load(f2)
-
-
-m_service: MapperService = MapperService(
-    mapping_config=config,
-    repository_service=r_service,
-    data_to_map=data
-)
-
-m_service.start_mapping()
-
-#organizations
-with open('docs/schema/organization-v1.0.0-map.json', 'r') as file:
-    config = json.load(file)
-with open('.data-init/organizations.json', 'r') as f2:
-    data = json.load(f2)
-
-
-m_service: MapperService = MapperService(
-    mapping_config=config,
-    repository_service=r_service,
-    data_to_map=data
-)
-
-m_service.start_mapping()
 
 #outputs
+config:dict
+data:dict
 with open('docs/schema/output-v1.0.0-map.json', 'r') as file:
     config = json.load(file)
-with open('.data-init/outputs.json', 'r') as f2:
-    data = json.load(f2)
+    with open('.data-init/outputs.json', 'r') as f2:
+        data = json.load(f2)
+        m_service: MapperService = MapperService(
+            mapping_config=config,
+            repository_service=r_service,
+            data_to_map=data
+        )
+
+        m_service.start_mapping()
 
 
-m_service: MapperService = MapperService(
-    mapping_config=config,
-    repository_service=r_service,
-    data_to_map=data
-)
+# # sources
+# config:dict
+# data:dict
+# with open('docs/schema/source-v1.0.0-map.json', 'r') as file:
+#     config = json.load(file)
+#     with open('.data-init/sources.json', 'r') as f2:
+#         data = json.load(f2)
+#         m_service: MapperService = MapperService(
+#             mapping_config=config,
+#             repository_service=r_service,
+#             data_to_map=data
+#         )
 
-m_service.start_mapping()
+#         m_service.start_mapping()
+
+
+# #organizations
+# config:dict
+# data:dict
+# with open('docs/schema/organization-v1.0.0-map.json', 'r') as file:
+#     config = json.load(file)
+#     with open('.data-init/organizations.json', 'r') as f2:
+#         data = json.load(f2)
+#         m_service: MapperService = MapperService(
+#             mapping_config=config,
+#             repository_service=r_service,
+#             data_to_map=data
+#         )
+
+#         m_service.start_mapping()
+
+
+# # persons
+# config:dict
+# data:dict
+# with open('docs/schema/person-v1.0.0-map.json', 'r') as file:
+#     config = json.load(file)
+#     with open('.data-init/persons.json', 'r') as f2:
+#         data = json.load(f2)
+#         m_service: MapperService = MapperService(
+#             mapping_config=config,
+#             repository_service=r_service,
+#             data_to_map=data
+#         )
+
+#         m_service.start_mapping()
+

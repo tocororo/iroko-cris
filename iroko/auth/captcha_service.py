@@ -65,7 +65,7 @@ class CaptchaService:
                 draw.line([(x1, y1), (x2, y2)], fill=(random.randint(100, 200), random.randint(100, 200), random.randint(100, 200)), width=2)
             
             # Add noise - random dots
-            for _ in range(200):
+            for _ in range(400):
                 x = random.randint(0, width)
                 y = random.randint(0, height)
                 draw.point((x, y), fill=(random.randint(0, 255), random.randint(0, 255), random.randint(0, 255)))
@@ -81,7 +81,7 @@ class CaptchaService:
             # Draw text with slight distortion
             for i, char in enumerate(captcha_text):
                 char_x = x + i * (text_width / len(captcha_text))
-                char_y = y + random.randint(-5, 5)
+                char_y = y + random.randint(-15, 5)
                 
                 # Draw each character with slight variation
                 draw.text(
@@ -92,7 +92,7 @@ class CaptchaService:
                 )
             
             # Add wave distortion to the entire text
-            self._add_wave_distortion(image)
+            # self._add_wave_distortion(image)
             
             # Convert to base64
             buffer = BytesIO()

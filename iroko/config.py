@@ -25,17 +25,21 @@ class AppSettings(BaseSettings):
     algorithm: str = "HS256"
     access_token_expire_minutes: int = 3000
     
-    # CORS
-    # cors_origins: List[str] = ["http://localhost:3000", "http://localhost:8000"]
-            
+    # CORS Configuration
     cors_origins: List[str] = [
-            "http://localhost:3000",
-            "http://localhost:8000",
-            "http://localhost:4200",
-            "http://localhost:8080"
-        ]
-
-
+        "http://localhost:3000",
+        "http://localhost:8000", 
+        "http://localhost:4200",
+        "http://localhost:8080",
+        "http://127.0.0.1:3000",
+        "http://127.0.0.1:8000",
+        "http://127.0.0.1:4200",
+        "http://127.0.0.1:8080",
+    ]
+    
+    # Production domain - will be added conditionally
+    production_domain: str = "https://sceiba.mes.gob.cu"
+    
     # Admin User (for initial setup)
     admin_email: Optional[str] = "admin@iroko.cu"
     admin_password: Optional[str] = "admin123"
@@ -43,7 +47,35 @@ class AppSettings(BaseSettings):
 
     log_to_file: bool = True
     log_file_path: str = "iroko.log"
+    log_level: str = "INFO"  # Add log level configuration
+    json_logs: bool = False  # Use JSON logging format
     
+    # Container detection
+    container_env: bool = False
+    
+    @property
+    def allowed_origins(self) -> List[str]:
+        """Get CORS origins based on environment"""
+        origins = self.cors_origins.copy()
+        
+        # Add production domain in production environment
+        if self.app_env == "production":
+            origins.extend([
+                self.production_domain,
+                "https://sceiba.reduniv.edu.cu",  # Add www subdomain if needed
+            ])
+        else:
+            # In development, allow common dev origins with HTTPS variants
+            origins.extend([
+                "https://localhost:3000",
+                "https://localhost:4200", 
+                "https://127.0.0.1:3000",
+                "https://127.0.0.1:4200",
+            ])
+        
+        # Remove duplicates and return
+        return list(set(origins))
+
     class Config:
         env_file = ".env"
         extra = "ignore"

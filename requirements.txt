@@ -734,6 +734,9 @@ python-dotenv==1.1.0 ; python_version >= "3.12" and python_version < "4.0" \
 python-jose==3.5.0 ; python_version >= "3.12" and python_version < "4.0" \
     --hash=sha256:abd1202f23d34dfad2c3d28cb8617b90acf34132c7afd60abd0b0b7d3cb55771 \
     --hash=sha256:fb4eaa44dbeb1c26dcc69e4bd7ec54a1cb8dd64d3b4d81ef08d90ff453f2b01b
+python-json-logger==4.0.0 ; python_version >= "3.12" and python_version < "4.0" \
+    --hash=sha256:af09c9daf6a813aa4cc7180395f50f2a9e5fa056034c9953aec92e381c5ba1e2 \
+    --hash=sha256:f58e68eb46e1faed27e0f574a55a0455eecd7b8a5b88b85a784519ba3cff047f
 python-multipart==0.0.6 ; python_version >= "3.12" and python_version < "4.0" \
     --hash=sha256:e9925a80bb668529f1b67c7fdb0a5dacdd7cbfc6fb0bff3ea443fe22bdd62132 \
     --hash=sha256:ee698bab5ef148b0a760751c261902cd096e57e10558e11aca17646b74ee1c18

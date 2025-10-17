@@ -97,28 +97,37 @@ class EvaluationService:
         await self._evaluate_questions(context, neo4j_session, result)
 
         # Step 2: Evaluate categories
-        await self._evaluate_categories(context, result)
+        await self._evaluate_categories(context, neo4j_session, result)
         
         # Step 3: Evaluate sections  
-        await self._evaluate_sections(context, result)
+        await self._evaluate_sections(context, neo4j_session, result)
         
         # Step 4: Evaluate methodology
-        await self._evaluate_methodology(context, result)
+        await self._evaluate_methodology(context, neo4j_session, result)
         
         return result
     
     async def complete_evaluation_result(self, neo4j_session: AsyncSession, result: EvaluationResult, user_id: UUID):
         context = await self.create_evaluation_context(
                 methodology_id=result.methodology.id, node_id= result.node_id, user_id= user_id, neo4j_session=neo4j_session)
-        context.answers = result.question_data
+        
+        for qid, question in result.question_data.items():
+            # if question.type == QuestionType.BOOLEAN:
+            #     question.answer.result = question.answer.result == 'true'
+            logger.debug(question.type)
+            logger.debug(question.answer.result)
+            logger.debug(type(question.answer.result))
+
+            context.set_answer(qid, question.answer)
+
         # Step 2: Evaluate categories
-        await self._evaluate_categories(context, result)
+        await self._evaluate_categories(context, neo4j_session, result)
         
         # Step 3: Evaluate sections  
-        await self._evaluate_sections(context, result)
+        await self._evaluate_sections(context, neo4j_session, result)
         
         # Step 4: Evaluate methodology
-        await self._evaluate_methodology(context, result)
+        await self._evaluate_methodology(context, neo4j_session, result)
         
         return result
     
@@ -171,40 +180,42 @@ class EvaluationService:
             
             # result.sections.append(section_result)
     
-    async def _evaluate_categories(self, context: EvaluationContext, result: EvaluationResult):
+    async def _evaluate_categories(self, context: EvaluationContext,
+                                neo4j_session: AsyncSession, result: EvaluationResult):
         """Evaluate all categories in the methodology"""
         for section in result.methodology.sections:
             for category in section.categories:
                 # Apply category rules if available
                 answer = await self.engine.evaluate_category(
-                    category.id, context, category.model_dump()
+                    category.id, context, neo4j_session
                 )
-                # qs = []
-                # for q in category.questions:
-                #     qs.append(self._questions.get(q))
-                # category.questions = qs
                 if answer:
                     category.answer = answer
-    
+                    context.category_results[category.id] = answer
+
+
     async def _evaluate_sections(self, context: EvaluationContext,
+                                neo4j_session: AsyncSession,
                                result: EvaluationResult):
         """Evaluate all sections in the methodology"""
         for section in result.methodology.sections:
             # Apply section rules if available
             answer = await self.engine.evaluate_section(
-                section.id, context, section.model_dump()
+                section.id, context, neo4j_session
             )
             if answer:
                 section.result = answer
+                context.section_results[section.id] = answer
     
-    async def _evaluate_methodology(self, context: EvaluationContext, result: EvaluationResult):
+    async def _evaluate_methodology(self, context: EvaluationContext,
+                                neo4j_session: AsyncSession, result: EvaluationResult):
         """Evaluate the complete methodology"""
         answer = await self.engine.evaluate_methodology(
-            result.methodology.id, context, result.methodology.model_dump()
+            result.methodology.id, context, neo4j_session
         )
         
         if answer:
-            result.methodology.answer = answer            
+            result.methodology.answer = answer
             # Add methodology-level recommendations
             # if answer.get('recommendations'):
             #     result.overall_recommendation += ". " + "; ".join(answer['recommendations'])

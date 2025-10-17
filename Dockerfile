@@ -45,6 +45,7 @@ ENV PATH="/home/iroko/.local/bin:$PATH"
 COPY --from=builder --chown=iroko:iroko /home/iroko/.local /home/iroko/.local
 RUN ls -lha /home/iroko/.local/lib/python3.12/site-packages
 
+
 COPY .data-init ./.data-init/
 COPY docs ./docs/
 COPY methodologies ./methodologies/
@@ -57,5 +58,8 @@ COPY --chmod=755 entrypoint.sh /usr/local/bin/entrypoint.sh
 
 
 EXPOSE 8000
+
+HEALTHCHECK --interval=30s --timeout=10s --start-period=45s --retries=3 \
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/health')" || exit 1
 
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]

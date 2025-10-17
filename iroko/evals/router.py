@@ -43,13 +43,13 @@ async def evaluate_node(
 ):
     """Evaluate a node using the specified methodology"""
     try:
-    
+
         result = await eval_service.create_evaluation_result(
             methodology_id, node_id, neo4j_session, current_user.id
         )
         return result
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+            raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Evaluation failed: {str(e)}")
 
