@@ -3,26 +3,26 @@ import json
 
 from iroko.config import app_settings
 
-r_service: RepositoryService = RepositoryService(
-    app_settings.neo4j_uri, app_settings.neo4j_username, app_settings.neo4j_password, app_settings.neo4j_database
-)
+# r_service: RepositoryService = RepositoryService(
+#     app_settings.neo4j_uri, app_settings.neo4j_username, app_settings.neo4j_password, app_settings.neo4j_database
+# )
 
 
 
-#outputs
-config:dict
-data:dict
-with open('docs/schema/output-v1.0.0-map.json', 'r') as file:
-    config = json.load(file)
-    with open('.data-init/outputs.json', 'r') as f2:
-        data = json.load(f2)
-        m_service: MapperService = MapperService(
-            mapping_config=config,
-            repository_service=r_service,
-            data_to_map=data
-        )
+# #outputs
+# config:dict
+# data:dict
+# with open('docs/schema/output-v1.0.0-map.json', 'r') as file:
+#     config = json.load(file)
+#     with open('.data-init/outputs.json', 'r') as f2:
+#         data = json.load(f2)
+#         m_service: MapperService = MapperService(
+#             mapping_config=config,
+#             repository_service=r_service,
+#             data_to_map=data
+#         )
 
-        m_service.start_mapping()
+#         m_service.start_mapping()
 
 
 # # sources
@@ -71,4 +71,23 @@ with open('docs/schema/output-v1.0.0-map.json', 'r') as file:
 #         )
 
 #         m_service.start_mapping()
+
+from neo4j import GraphDatabase
+
+session = GraphDatabase.driver(
+            app_settings.neo4j_uri,
+            auth=(
+                app_settings.neo4j_username,
+                app_settings.neo4j_password
+            ),
+            database=app_settings.neo4j_database
+        ).session()
+
+session.run("""
+MATCH (n:Source)
+REMOVE n:Source
+SET n:Publication
+""")
+
+session.close()
 

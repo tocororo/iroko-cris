@@ -5,7 +5,7 @@ id: 'm_001'
 name: 'Sceiba'
 version: '1.0.0'
 description: 'Metodologia de Sceiba para la evaluacion de revistas cientificas'
-entity: Source
+entity: Publication
 sections:
 
   #Visibility Section

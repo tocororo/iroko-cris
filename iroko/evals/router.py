@@ -81,11 +81,11 @@ async def store_evaluation(
     current_user: User = Depends(get_current_user)
 ):
     """Store an evaluation result"""
-    # try:
-    stored = await eval_service.store_evaluation(db_session, evaluation, current_user.id)
-    return stored
-    # except Exception as e:
-    #     raise HTTPException(status_code=500, detail=f"Failed to store evaluation: {str(e)}")
+    try:
+        stored = await eval_service.store_evaluation(db_session, evaluation, current_user.id)
+        return stored
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to store evaluation: {str(e)}")
 
 @router.get("/history/{node_id}", response_model=List[StoredEvaluation])
 async def get_evaluation_history(
