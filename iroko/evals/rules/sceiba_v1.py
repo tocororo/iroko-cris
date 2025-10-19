@@ -1,6 +1,6 @@
-# iroko/evals/rules/m_001.py
+# iroko/evals/rules/sceiba_v1.py
 """
-Rules for methodology m_001 (sceiba-journal evaluation)
+Rules for methodology sceiba_v1 (sceiba-journal evaluation)
 """
 from typing import Dict, Any, Union
 from neo4j import AsyncSession
@@ -15,7 +15,7 @@ import logging
 logger = logging.getLogger('iroko-cris')
 
 # =============================================================================
-# QUESTION RULES for m_001
+# QUESTION RULES for sceiba_v1
 # =============================================================================
 
 @rules_registry.register_question_rule('c_001_q_001')
@@ -212,13 +212,13 @@ async def c_008_q_001(context: EvaluationContext, neo4j_session: AsyncSession) -
     return None
 
 # =============================================================================
-# CATEGORY RULES for m_001
+# CATEGORY RULES for sceiba_v1
 # =============================================================================
 
-@rules_registry.register_category_rule('m_001_indizacion', [
+@rules_registry.register_category_rule('sceiba_v1_cat_indizacion', [
     'c_001_q_001', 'c_004_q_003', 'c_007_q_001', 'c_007_q_002', 'c_007_q_003', 'c_001_q_002', 'c_001_q_003', 'c_001_q_004'
 ])
-async def m_001_indizacion(context: EvaluationContext, neo4j_session: AsyncSession) -> Answer:
+async def sceiba_v1_cat_indizacion(context: EvaluationContext, neo4j_session: AsyncSession) -> Answer:
     """Calculate results and recommendations for Indización category"""
 
     recoms = []
@@ -273,10 +273,10 @@ async def m_001_indizacion(context: EvaluationContext, neo4j_session: AsyncSessi
     return a
 
 
-@rules_registry.register_category_rule('m_001_acceso', [
+@rules_registry.register_category_rule('sceiba_v1_cat_acceso', [
     'c_002_q_001', 'c_002_q_002', 'c_002_q_003', 'c_002_q_004', 'c_002_q_005'
 ])
-async def m_001_acceso(context: EvaluationContext, neo4j_session: AsyncSession) -> Answer:
+async def sceiba_v1_cat_acceso(context: EvaluationContext, neo4j_session: AsyncSession) -> Answer:
     recoms = []
 
     c_002_q_001 = context.get_answer('c_002_q_001').result
@@ -330,11 +330,11 @@ async def m_001_acceso(context: EvaluationContext, neo4j_session: AsyncSession) 
 
     return Answer(result=result, recommendation=recoms)
 
-@rules_registry.register_category_rule('m_001_interoperabilidad', [
+@rules_registry.register_category_rule('sceiba_v1_cat_interoperabilidad', [
     'c_003_q_001', 'c_003_q_002', 'c_003_q_003', 'c_003_q_004',
     'c_003_q_005', 'c_003_q_006', 'c_003_q_008'
 ])
-async def m_001_interoperabilidad(context: EvaluationContext, neo4j_session: AsyncSession) -> Answer:
+async def sceiba_v1_cat_interoperabilidad(context: EvaluationContext, neo4j_session: AsyncSession) -> Answer:
     """Calculate results and recommendations for Interoperabilidad category"""
     recoms = []
 
@@ -394,11 +394,11 @@ async def m_001_interoperabilidad(context: EvaluationContext, neo4j_session: Asy
 
     return Answer(result=result, recommendation=recoms)
 
-@rules_registry.register_category_rule('m_001_apertura', [
+@rules_registry.register_category_rule('sceiba_v1_cat_apertura', [
         'c_004_q_001', 'c_004_q_002', 'c_004_q_003', 'c_004_q_004',
     'c_004_q_005', 'c_002_q_003'
 ])
-async def m_001_apertura(context: EvaluationContext, neo4j_session: AsyncSession) -> Answer:
+async def sceiba_v1_cat_apertura(context: EvaluationContext, neo4j_session: AsyncSession) -> Answer:
     recoms = []
 
     c_004_q_001 = context.get_answer('c_004_q_001').result
@@ -451,11 +451,11 @@ async def m_001_apertura(context: EvaluationContext, neo4j_session: AsyncSession
 
     return Answer(result=result, recommendation=recoms)
 
-@rules_registry.register_category_rule('m_001_internacionalizacion', [
+@rules_registry.register_category_rule('sceiba_v1_cat_internacionalizacion', [
     'c_005_q_001', 'c_005_q_002', 'c_005_q_003', 'c_005_q_004',
     'c_005_q_005', 'c_005_q_006'
 ])
-async def m_001_internacionalizacion(context: EvaluationContext, neo4j_session: AsyncSession) -> Answer:
+async def sceiba_v1_cat_internacionalizacion(context: EvaluationContext, neo4j_session: AsyncSession) -> Answer:
     """Calculate results and recommendations for Internacionalización category"""
     recoms = []
 
@@ -505,10 +505,10 @@ async def m_001_internacionalizacion(context: EvaluationContext, neo4j_session: 
 
     return Answer(result=result, recommendation=recoms)
 
-@rules_registry.register_category_rule('m_001_redes_sociales', [
+@rules_registry.register_category_rule('sceiba_v1_cat_redes_sociales', [
     'c_006_q_001', 'c_006_q_002', 'c_006_q_003', 'c_007_q_001'
 ])
-async def m_001_redes_sociales(context: EvaluationContext, neo4j_session: AsyncSession) -> Answer:
+async def sceiba_v1_cat_redes_sociales(context: EvaluationContext, neo4j_session: AsyncSession) -> Answer:
     """Calculate results and recommendations for Redes sociales category"""
     recoms = []
 
@@ -548,10 +548,10 @@ async def m_001_redes_sociales(context: EvaluationContext, neo4j_session: AsyncS
 
     return Answer(result=result, recommendation=recoms)
 
-@rules_registry.register_category_rule('m_001_impacto_academico', [
+@rules_registry.register_category_rule('sceiba_v1_cat_impacto_academico', [
     'c_007_q_001', 'c_007_q_002', 'c_007_q_003', 'c_008_q_001', 'c_001_q_002'
 ])
-async def m_001_impacto_academico(context: EvaluationContext, neo4j_session: AsyncSession) -> Answer:
+async def sceiba_v1_cat_impacto_academico(context: EvaluationContext, neo4j_session: AsyncSession) -> Answer:
     """Calculate results and recommendations for Impacto académico category"""
     c_007_q_001 = context.get_answer('c_007_q_001').result
     c_007_q_002 = context.get_answer('c_007_q_002').result
@@ -593,8 +593,8 @@ async def m_001_impacto_academico(context: EvaluationContext, neo4j_session: Asy
     else:
         return Answer(result="ERROR", recommendation=[])
 
-@rules_registry.register_category_rule('m_001_posicion_rankings', ['c_008_q_001'])
-async def m_001_posicion_rankings(context: EvaluationContext, neo4j_session: AsyncSession) -> Answer:
+@rules_registry.register_category_rule('sceiba_v1_cat_posicion_rankings', ['c_008_q_001'])
+async def sceiba_v1_cat_posicion_rankings(context: EvaluationContext, neo4j_session: AsyncSession) -> Answer:
     """Calculate results and recommendations for Posición en rankings category"""
     c_008_q_001 = context.get_answer('c_008_q_001').result
 
@@ -608,117 +608,192 @@ async def m_001_posicion_rankings(context: EvaluationContext, neo4j_session: Asy
         return Answer(result="ERROR", recommendation=[])
 
 # =============================================================================
-# SECTION RULES for m_001
+# SECTION RULES for sceiba_v1_cat
 # =============================================================================
 
-@rules_registry.register_section_rule('m_001_01', ['m_001_01_01', 'm_001_01_02', 'm_001_01_03', 'm_001_01_04', 'm_001_01_05', 'm_001_01_06'])
-async def m_001_01(context: EvaluationContext, neo4j_session: AsyncSession) -> Answer:
+@rules_registry.register_section_rule('sceiba_v1_sec_visibility', [
+    'c_001_q_001', 'c_001_q_002', 'c_001_q_003', 'c_001_q_004',
+    'c_002_q_001', 'c_002_q_002', 'c_002_q_003', 'c_002_q_004',
+    'c_002_q_005',
+    'c_003_q_001', 'c_003_q_002', 'c_003_q_003', 'c_003_q_005',
+    'c_003_q_006',
+    'c_004_q_001', 'c_004_q_002', 'c_004_q_003', 'c_004_q_005',
+    'c_005_q_001', 'c_005_q_003', 'c_005_q_004', 'c_005_q_005',
+    'c_005_q_006'
+])
+async def sceiba_v1_sec_visibility(context: EvaluationContext, neo4j_session: AsyncSession) -> Answer:
     """Calculate overall Visibilidad section results"""
-    return None
-    # visibility_categories = ['m_001_01_01', 'm_001_01_02', 'm_001_01_03', 'm_001_01_04', 'm_001_01_05', 'm_001_01_06']
-    
-    # total_score = 0
-    # valid_categories = 0
-    # recommendations = []
-    
-    # for category_id in visibility_categories:
-    #     category_result = category_results.get(category_id, {})
-    #     if category_result and 'result' in category_result and category_result['result'] is not None:
-    #         total_score += category_result['result']
-    #         valid_categories += 1
-    #         if category_result.get('recommendation'):
-    #             recommendations.append(category_result['recommendation'])
-    
-    # final_score = total_score / valid_categories if valid_categories > 0 else 0
-    
-    # # Overall recommendation based on score
-    # if final_score >= 0.8:
-    #     overall_rec = "Excelente visibilidad"
-    # elif final_score >= 0.6:
-    #     overall_rec = "Buena visibilidad"
-    # else:
-    #     overall_rec = "Visibilidad necesita mejora"
-    
-    # if recommendations:
-    #     overall_rec += f". Recomendaciones: {'; '.join(recommendations)}"
-    
-    # return {
-    #     'result': final_score,
-    #     'recommendation': overall_rec
-    # }
+     # Indización
+    c_001_q_001 = context.get_answer('c_001_q_001').result
+    c_001_q_002 = context.get_answer('c_001_q_002').result
+    c_001_q_003 = context.get_answer('c_001_q_003').result
+    c_001_q_004 = context.get_answer('c_001_q_004').result
 
-@rules_registry.register_section_rule('m_001_02', ['m_001_02_01', 'm_001_02_02'])
-async def m_001_02(context: EvaluationContext, neo4j_session: AsyncSession) -> Answer:
+    # Acceso
+    c_002_q_001 = context.get_answer('c_002_q_001').result
+    c_002_q_002 = context.get_answer('c_002_q_002').result
+    c_002_q_003 = context.get_answer('c_002_q_003').result
+    c_002_q_004 = context.get_answer('c_002_q_004').result
+    c_002_q_005 = context.get_answer('c_002_q_005').result
+
+    # Interoperabilidad
+    c_003_q_001 = context.get_answer('c_003_q_001').result
+    c_003_q_002 = context.get_answer('c_003_q_002').result
+    c_003_q_003 = context.get_answer('c_003_q_003').result
+    c_003_q_005 = context.get_answer('c_003_q_005').result
+    c_003_q_006 = context.get_answer('c_003_q_006').result
+
+    # Apertura
+    c_004_q_001 = context.get_answer('c_004_q_001').result
+    c_004_q_002 = context.get_answer('c_004_q_002').result
+    c_004_q_003 = context.get_answer('c_004_q_003').result
+    c_004_q_005 = context.get_answer('c_004_q_005').result
+
+    # Internacionalización
+    c_005_q_001 = context.get_answer('c_005_q_001').result
+    c_005_q_003 = context.get_answer('c_005_q_003').result
+    c_005_q_004 = context.get_answer('c_005_q_004').result
+    c_005_q_005 = context.get_answer('c_005_q_005').result
+    c_005_q_006 = context.get_answer('c_005_q_006').result
+
+    # First block: HIGH condition
+    var1 = (
+        c_001_q_001 == False and
+        c_001_q_002 == False and
+        (int(c_001_q_003) + int(c_001_q_004) == 0)
+    )
+
+    var2 = (
+        c_002_q_001 == True and
+        c_002_q_002 == 'TODOS_NUM_PUBLICADOS_ULTIMOS_DOS_AÑOS' and
+        c_002_q_003 == 'SI_DISPONIBLE_IND_SI_DESC_NUM' and
+        c_002_q_005 == True
+    )
+
+    var3 = (
+        c_003_q_001 == True and
+        c_003_q_002 == True and
+        c_003_q_003 == True and
+        c_003_q_005 == True and
+        c_003_q_006 == True
+    )
+
+    var4 = (
+        c_004_q_001 == 'NO_PERMITE_AUTOARCHIVADO_VER' or
+        c_004_q_002 == False or
+        c_004_q_003 == False or
+        c_004_q_005 == False
+    )
+
+    var5 = (
+        c_005_q_001 != 'EN_MAS_DE_UN_IDIOMA' or
+        c_005_q_003 == 'MENOS_DEL_20' or
+        c_005_q_004 == 'MENOS_DEL_20' or
+        c_005_q_005 == 'MAS_DEL_50_TOTAL_PUBLICADO_PERIODO' or
+        c_005_q_006 == 'MENOS_DEL_5_TOTAL_ART_ULT_DOS_AÑOS'
+    )
+
+    high = (not var1) and var2 and var3 and (not var4) and (not var5)
+
+    if high:
+        return Answer(result="ALTO", recommendation=[])
+
+    # Second block: LOW condition
+    var1b = (c_004_q_003 == c_001_q_001)
+
+    var2b = (
+        var1b and
+        c_001_q_002 == True and
+        (int(c_001_q_003) + int(c_001_q_004) >= 1)
+    )
+
+    var3b = (
+        c_002_q_001 == False or
+        c_002_q_003 == 'SI_DISPONIBLE_IND_NO_DESC_NUM' or
+        c_002_q_003 == 'NO_DISPONIBLE_IND_NO_DESC_NUM' or
+        c_002_q_002 == 'NO_DISPONIBLE_ULTIMO_NUM' or
+        c_002_q_002 == 'NO_APLICA' or
+        (c_002_q_004 == False and c_002_q_005 == False)
+    )
+
+    var4b = (
+        c_003_q_001 == False or
+        c_003_q_002 == False or
+        c_003_q_003 == False or
+        c_003_q_005 == False
+    )
+
+    var5b = (
+        c_004_q_001 == 'NO_PERMITE_AUTOARCHIVADO_VER' or
+        c_004_q_002 == False or
+        c_004_q_003 == False or
+        c_004_q_005 == False
+    )
+
+    var6b = (
+        c_005_q_001 != 'EN_MAS_DE_UN_IDIOMA' or
+        c_005_q_003 == 'MENOS_DEL_20' or
+        c_005_q_004 == 'MENOS_DEL_20' or
+        c_005_q_005 == 'MAS_DEL_50_TOTAL_PUBLICADO_PERIODO' or
+        c_005_q_006 == 'MENOS_DEL_5_TOTAL_ART_ULT_DOS_AÑOS'
+    )
+
+    low = (not var2b) and var3b and var4b and var5b and var6b
+
+    if low:
+        return Answer(result="BAJO", recommendation=[])
+
+    if (not high) and (not low):
+        return Answer(result="MEDIO", recommendation=[])
+
+    return Answer(result="ERROR", recommendation=[])
+
+@rules_registry.register_section_rule('sceiba_v1_sec_impact', ['c_008_q_001', 'sceiba_v1_cat_impacto_academico'])
+async def sceiba_v1_sec_impact(context: EvaluationContext, neo4j_session: AsyncSession) -> Answer:
     """Calculate overall Impacto section results"""
-    return None
-    # impact_categories = ['m_001_02_01', 'm_001_02_02']
     
-    # total_score = 0
-    # valid_categories = 0
-    # recommendations = []
-    
-    # for category_id in impact_categories:
-    #     category_result = category_results.get(category_id, {})
-    #     if category_result and 'result' in category_result and category_result['result'] is not None:
-    #         total_score += category_result['result']
-    #         valid_categories += 1
-    #         if category_result.get('recommendation'):
-    #             recommendations.append(category_result['recommendation'])
-    
-    # final_score = total_score / valid_categories if valid_categories > 0 else 0
-    
-    # # Overall recommendation based on score
-    # if final_score >= 0.8:
-    #     overall_rec = "Excelente impacto"
-    # elif final_score >= 0.6:
-    #     overall_rec = "Buen impacto"
-    # else:
-    #     overall_rec = "Impacto necesita mejora"
-    
-    # if recommendations:
-    #     overall_rec += f". Recomendaciones: {'; '.join(recommendations)}"
-    
-    # return {
-    #     'result': final_score,
-    #     'recommendation': overall_rec
-    # }
+    c_008_q_001 = context.get_answer('c_008_q_001').result
+    logger.debug('------------/////////////-----------------')
+    logger.debug(context.category_results.get('sceiba_v1_cat_impacto_academico'))
+    logger.debug('-------------//////////----------------')
+    cat_impacto_academico = context.category_results.get('sceiba_v1_cat_impacto_academico').result
+
+    var1 = cat_impacto_academico
+    var2 = (var1 == 'ALTO') and (c_008_q_001 != 'NO')
+
+    if var2:
+        return Answer(result="ALTO", recommendation=[])
+
+    if var1 == 'BAJO':
+        return Answer(result="BAJO", recommendation=[])
+
+    if (not var2) and (var1 != 'BAJO'):
+        return Answer(result="MEDIO", recommendation=[])
+
+    return Answer(result="ERROR", recommendation=[])
 
 # =============================================================================
-# METHODOLOGY RULES for m_001
+# METHODOLOGY RULES for sceiba_v1
 # =============================================================================
 
-@rules_registry.register_methodology_rule('m_001', ['m_001_01', 'm_001_02'])
-async def m_001(context: EvaluationContext, neo4j_session: AsyncSession) -> Answer:
+@rules_registry.register_methodology_rule('sceiba_v1',  ['sceiba_v1_sec_visibility', 'sceiba_v1_sec_impact'])
+async def sceiba_v1(context: EvaluationContext, neo4j_session: AsyncSession) -> Answer:
     """Calculate final methodology results and overall recommendations"""
-    return None
-    # visibility_score = section_results.get('m_001_01', {}).get('result', 0)
-    # impact_score = section_results.get('m_001_02', {}).get('result', 0)
     
-    # # Weighted final score (60% visibility, 40% impact)
-    # final_score = (visibility_score * 0.6) + (impact_score * 0.4)
-    
-    # recommendations = []
-    
-    # visibility_rec = section_results.get('m_001_01', {}).get('recommendation')
-    # impact_rec = section_results.get('m_001_02', {}).get('recommendation')
-    
-    # if visibility_rec:
-    #     recommendations.append(f"Visibilidad: {visibility_rec}")
-    # if impact_rec:
-    #     recommendations.append(f"Impacto: {impact_rec}")
-    
-    # # Overall assessment
-    # if final_score >= 0.8:
-    #     overall_assessment = "Revista de excelente calidad"
-    # elif final_score >= 0.6:
-    #     overall_assessment = "Revista de buena calidad"
-    # elif final_score >= 0.4:
-    #     overall_assessment = "Revista que necesita mejoras"
-    # else:
-    #     overall_assessment = "Revista que requiere mejoras significativas"
-    
-    # return {
-    #     'final_score': final_score,
-    #     'overall_assessment': overall_assessment,
-    #     'recommendations': recommendations
-    # }
+    logger.debug('*-**-*-***-*--*-*-*-*--*-*-*---*-*-**-*-*-*-*-*-*-*-*-*-*-*-*--**')
+    logger.debug(context.category_results.get('sceiba_v1_sec_visibility'))
+    logger.debug(context.category_results.get('sceiba_v1_sec_impact'))
+    logger.debug('*-**-*-***-*--*-*-*-*--*-*-*---*-*-**-*-*-*-*-*-*-*-*-*-*-*-*--**')
+
+    visibility = context.section_results.get('sceiba_v1_sec_visibility').result
+    impact = context.section_results.get('sceiba_v1_sec_impact').result
+
+    if visibility == 'ALTO' and impact != 'BAJO':
+        return Answer(result="Nivel de calidad competitivo", recommendation=[])
+
+    if visibility == 'BAJO' and impact != 'ALTO':
+        return Answer(result="Nivel de calidad embrionario", recommendation=[])
+
+    return Answer(result="Nivel de calidad en desarrollo", recommendation=[])
+
+    template['generalEvaluationValue'] = 'Nivel de calidad en desarrollo'

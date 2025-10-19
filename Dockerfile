@@ -1,5 +1,5 @@
 # Builder stage
-FROM quay.io/lib/python:3.12-slim AS builder
+FROM docker.uclv.cu/python:3.12-slim AS builder
 
 RUN apt-get update && apt-get install -y --no-install-recommends build-essential \
  && apt-get clean && rm -rf /var/lib/apt/lists/*
@@ -28,7 +28,7 @@ RUN pip install --user --no-cache-dir .
 
 
 # Production stage
-FROM quay.io/lib/python:3.12-slim
+FROM docker.uclv.cu/python:3.12-slim
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \

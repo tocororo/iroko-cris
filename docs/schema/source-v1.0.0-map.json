@@ -3,7 +3,7 @@
     "description": "Mapping sources to a knowledge graph.",
     "entities": [
         {
-            "name": "Source",
+            "name": "Publication",
             "mapping": {
                 "required": [
                     "identifiers",
@@ -12,7 +12,7 @@
                     "source_status",
                     "source_type"
                 ],
-                "_class": "Source",
+                "_class": "Publication",
                 "properties": {
                     "id": "id",
                     "identifiers": {

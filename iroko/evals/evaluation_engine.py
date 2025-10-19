@@ -62,6 +62,9 @@ class EvaluationEngine:
                 
                 # Execute category rule
                 result = await rule_def.func(context, neo4j_session)
+                logger.debug(f'------------cat-{category_id}----------------')
+                logger.debug(result)
+                logger.debug('-----------------------------')
                 context.category_results[category_id] = result
                 return result
                 
@@ -80,13 +83,15 @@ class EvaluationEngine:
                 rule_def = self.rules.section_rules[section_id]
                 
                 # Check if we have all required category results
-                missing_categories = [cat for cat in rule_def.dependencies if cat not in context.category_results]
-                if missing_categories:
-                    logger.warning(f"Missing category results for section {section_id}: {missing_categories}")
+                if not context.has_all_answers(rule_def.dependencies):
+                    logger.warning(f"Missing category results for section {section_id}")
                     return None
                 
                 # Execute section rule
                 result = await rule_def.func(context, neo4j_session)
+                logger.debug(f'------------sec-{section_id}----------------')
+                logger.debug(result)
+                logger.debug('-----------------------------')
                 context.section_results[section_id] = result
                 return result
                 
@@ -105,9 +110,8 @@ class EvaluationEngine:
                 rule_def = self.rules.methodology_rules[methodology_id]
                 
                 # Check if we have all required section results
-                missing_sections = [sec for sec in rule_def.dependencies if sec not in context.section_results]
-                if missing_sections:
-                    logger.warning(f"Missing section results for methodology {methodology_id}: {missing_sections}")
+                if not context.has_all_answers(rule_def.dependencies):
+                    logger.warning(f"Missing section results for methodology {methodology_id}")
                     return None
                 
                 # Execute methodology rule

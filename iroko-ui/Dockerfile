@@ -1,4 +1,4 @@
-FROM quay.io/lib/nginx:alpine
+FROM docker.uclv.cu/nginx:alpine
 
 # Copy built Angular app
 COPY dist/iroko-ui-pwa/browser /usr/share/nginx/html

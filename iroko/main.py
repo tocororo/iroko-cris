@@ -31,9 +31,16 @@ async def lifespan(app: FastAPI):
     if app_settings.app_env != "test":
         try:
             await neo4j_db.get_session()
+            
             await init_db()
+            
             await initialize_auth_system()
+
             await eval_service.load_methodologies()
+            await eval_service.validate_methodology_rules()
+            # if app_settings.app_env == "production":
+            await eval_service.preload_all_methodology_rules()
+
             logger.info("All services initialized successfully")
         except Exception as e:
             logger.error(f"Service initialization failed: {e}")

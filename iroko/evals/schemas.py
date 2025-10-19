@@ -61,6 +61,7 @@ class Methodology(BaseModel):
     version: str
     description: str
     entity: str  # Node type (Source, Organization, Person, etc.)
+    rules: Optional[str] = None # python module of the rules implementations
     sections: List[Section]
     answer: Optional[Answer] = None
 

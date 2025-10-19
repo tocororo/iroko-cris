@@ -67,7 +67,6 @@ async def complete_evaluation(
     """
     try:
         
-        # Store the completed evaluation
         result = await eval_service.complete_evaluation_result(neo4j_session, evaluation, current_user.id)
         return result
     

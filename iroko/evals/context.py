@@ -38,4 +38,7 @@ class EvaluationContext:
     
     def has_all_answers(self, question_ids: list) -> bool:
         """Check if all required questions have answers"""
-        return all(qid in self.answers and self.answers[qid] is not None for qid in question_ids)
+        all_known_keys = set(self.answers.keys()) | set(self.category_results.keys()) | set(self.section_results.keys())
+        return all(id_ in all_known_keys for id_ in question_ids)
+
+        # return all(qid in self.answers and self.answers[qid] is not None for qid in question_ids)

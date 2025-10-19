@@ -1,4 +1,5 @@
 # iroko/evals/service.py
+import importlib
 import yaml
 import os
 from typing import Dict, List, Optional
@@ -50,21 +51,51 @@ class EvaluationService:
         except Exception as e:
             logger.error(f"Error loading methodologies: {e}")
             raise
-    
-    def __helper_fill_questions(self, methodology_data):
-        if 'sections' in methodology_data:
-            for section in methodology_data.get('sections'):
-                if 'categories' in section:
-                    for category in section.get('categories'):
-                        if 'questions' in category:
-                            for question in category.get('questions'):
-                                question = self._questions[question]
+ 
+    async def validate_methodology_rules(self):
+        """Validate that all specified rules modules can be imported"""
+        logger.info("Validating methodology rules modules...")
+        
+        for methodology_id, methodology in self._methodologies.items():
+            if methodology.rules:
+                try:
+                    # Test import without actually loading (to avoid side effects)
+                    importlib.util.find_spec(methodology.rules)
+                    logger.info(f"✓ Rules module valid for {methodology_id}: {methodology.rules}")
+                except Exception as e:
+                    logger.error(f"✗ Invalid rules module for {methodology_id}: {methodology.rules} - {e}")
+            else:
+                logger.warning(f"ℹ No rules module specified for {methodology_id}")
+
+                
+    async def preload_all_methodology_rules(self):
+        """Pre-load rules for all methodologies at startup"""
+        logger.info("Pre-loading rules for all methodologies...")
+        
+        for methodology_id, methodology in self._methodologies.items():
+            if methodology.rules:
+                try:
+                    await rules_registry.load_rules_module(methodology.rules)
+                    logger.info(f"Pre-loaded rules for {methodology_id} from {methodology.rules}")
+                except Exception as e:
+                    logger.error(f"Failed to pre-load rules for {methodology_id}: {e}")
+            else:
+                logger.warning(f"No rules module specified for methodology: {methodology_id}")
+        
+        logger.info("Completed pre-loading methodology rules")
 
     async def create_evaluation_context(self, methodology_id: str, node_id: str, 
                                      user_id: UUID, neo4j_session: AsyncSession) -> EvaluationContext:
         """Create evaluation context with node data and load methodology-specific rules"""
+        
+        # Get the methodology to check for custom rules
+        methodology = self._methodologies.get(methodology_id)
+        if not methodology:
+            raise ValueError(f"Methodology {methodology_id} not found")
+        
         # Load methodology-specific rules
-        await rules_registry.load_methodology_rules(methodology_id)
+        rules_module = methodology.rules
+        await rules_registry.load_methodology_rules(methodology_id, rules_module)
         
         node_data = await self._get_node_data(neo4j_session, node_id)
         return EvaluationContext(
@@ -204,7 +235,7 @@ class EvaluationService:
                 section.id, context, neo4j_session
             )
             if answer:
-                section.result = answer
+                section.answer = answer
                 context.section_results[section.id] = answer
     
     async def _evaluate_methodology(self, context: EvaluationContext,

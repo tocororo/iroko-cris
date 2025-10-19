@@ -49,7 +49,7 @@
                     },
                     "relationships": {
                         "__relation": "id",
-                        "__predicate": "RELATED_TO",
+                        "__predicate": "RELATED_ORGANIZATION",
                         "__target": "Organization",
                         "id": "id",
                         "label": "name",
@@ -59,7 +59,7 @@
                     }, 
                     "redirect": {
                         "__relation": "value",
-                        "__predicate": "IS_REDIRECTED",
+                        "__predicate": "REDIRECTED_ORGANIZATION",
                         "__target": "Organization",
                         "value": "id"
                     }

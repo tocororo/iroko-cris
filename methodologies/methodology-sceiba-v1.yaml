@@ -1,21 +1,22 @@
 
 #Metodología de evaluación de revistas de Sceiba en espannol
 
-id: 'm_001'
+id: 'sceiba_v1'
 name: 'Sceiba'
 version: '1.0.0'
 description: 'Metodologia de Sceiba para la evaluacion de revistas cientificas'
 entity: Publication
+rules: iroko.evals.rules.sceiba_v1
 sections:
 
   #Visibility Section
   - title: 'Visibilidad'
     description: 'Indicador de Visibilidad'
-    id: 'm_001_01'
+    id: 'sceiba_v1_sec_visibility'
     categories:
 
       - title: 'Indización'
-        id: 'm_001_indizacion'
+        id: 'sceiba_v1_cat_indizacion'
         questions:
           - c_001_q_001
           - c_001_q_002
@@ -23,7 +24,7 @@ sections:
           - c_001_q_004
 
       - title: 'Acceso'
-        id: 'm_001_acceso'
+        id: 'sceiba_v1_cat_acceso'
         questions:
           - c_002_q_001
           - c_002_q_002
@@ -33,7 +34,7 @@ sections:
             
 
       - title: 'Interoperabilidad'
-        id: 'm_001_interoperabilidad'
+        id: 'sceiba_v1_cat_interoperabilidad'
         questions: 
           - c_003_q_001
           - c_003_q_002
@@ -45,7 +46,7 @@ sections:
           - c_003_q_008
         
       - title: 'Apertura'
-        id: 'm_001_apertura'
+        id: 'sceiba_v1_cat_apertura'
         questions:
           - c_004_q_001
           - c_004_q_002
@@ -54,7 +55,7 @@ sections:
           - c_004_q_005
 
       - title: 'Internacionalización'
-        id: 'm_001_internacionalizacion'
+        id: 'sceiba_v1_cat_internacionalizacion'
         questions:
           - c_005_q_001     
           - c_005_q_002
@@ -64,7 +65,7 @@ sections:
           - c_005_q_006
 
       - title: 'Redes sociales'
-        id: 'm_001_redes_sociales'
+        id: 'sceiba_v1_cat_redes_sociales'
         questions:
           - c_006_q_001
           - c_006_q_002
@@ -73,17 +74,17 @@ sections:
   # Impact Section
   - title: 'Impacto'
     description: 'Indicador de Impacto'
-    id: 'm_001_02'
+    id: 'sceiba_v1_sec_impact'
     categories:
 
       - title: 'Impacto académico'
-        id: 'm_001_impacto_academico'
+        id: 'sceiba_v1_cat_impacto_academico'
         questions:
           - c_007_q_001
           - c_007_q_002
           - c_007_q_003
 
       - title: 'Posición en rankings de revistas'
-        id: 'm_001_posicion_rankings'
+        id: 'sceiba_v1_cat_posicion_rankings'
         questions: 
           - c_008_q_001
