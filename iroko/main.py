@@ -5,6 +5,8 @@ from iroko.cypher.routers import cypher
 from iroko.auth.router import router as auth_router
 from iroko.auth.init import initialize_auth_system
 from iroko.evals.router import router as evals_router
+from iroko.crawler.router import router as crawler_router
+from iroko.crawler.manager import crawler_manager
 from iroko.evals.service import eval_service
 from iroko.config import app_settings
 from fastapi.middleware.cors import CORSMiddleware
@@ -35,6 +37,9 @@ async def lifespan(app: FastAPI):
             await init_db()
             
             await initialize_auth_system()
+            
+            await crawler_manager.auto_discover_tasks()
+            logger.info("Crawler manager initialized with auto-discovered tasks")
 
             await eval_service.load_methodologies()
             await eval_service.validate_methodology_rules()
@@ -50,6 +55,7 @@ async def lifespan(app: FastAPI):
     
     # Shutdown
     logger.info("Shutting down Iroko API")
+    await crawler_manager.shutdown()
     await neo4j_db.close()
     await close_db()
 
@@ -109,6 +115,7 @@ app.add_middleware(
 app.include_router(cypher.router, prefix="/v1")
 app.include_router(auth_router, prefix="/v1")
 app.include_router(evals_router, prefix="/v1")
+app.include_router(crawler_router, prefix="/v1")
 
 
 # Add CORS preflight handler for all routes

@@ -1,0 +1,12 @@
+{
+    "task_id": "import_organizations",
+    "name": "Import Organizations",
+    "description": "Import organization data from JSON file",
+    "schedule": "0 2 * * *",
+    "enabled": true,
+    "config": {
+        "mapping_file": "docs/schema/organization-v1.0.0-map.json",
+        "data_file": ".data-init/organizations.json"
+    },
+    "max_execution_time": 1800
+}
