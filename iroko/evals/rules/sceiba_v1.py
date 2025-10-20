@@ -2,9 +2,7 @@
 """
 Rules for methodology sceiba_v1 (sceiba-journal evaluation)
 """
-from typing import Dict, Any, Union
 from neo4j import AsyncSession
-from numpy import number
 
 from iroko.evals.context import EvaluationContext
 from iroko.evals.schemas import Answer
