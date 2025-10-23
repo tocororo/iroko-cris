@@ -1,0 +1,154 @@
+#!/usr/bin/env python3
+import asyncio
+import logging
+import sys
+from pathlib import Path
+
+from iroko.crawler.tasks.ojs import OjsProcessingTask
+from iroko.crawler.tasks.scielo import ScieloProcessingTask
+
+# Add project root to path
+sys.path.insert(0, str(Path(__file__).parent))
+
+from iroko.crawler.manager import crawler_manager
+from iroko.crawler.schemas import CrawlerTaskConfig
+from iroko.crawler.tasks.dummy_task import DummyTask
+from iroko.crawler.tasks.miar import ColectMiarIndexes, FixMiarIndexs, MiarCubaJournalsCrawler, MiarDataProcessingTask
+
+
+# Setup logging to see the output
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[logging.StreamHandler()]
+)
+
+
+async def add_execute(task_config: CrawlerTaskConfig, task_type: str):
+    
+    # Add task to manager
+    await crawler_manager.add_task(task_config, task_type)
+    print(f"✅ {task_type} task added to manager")
+    
+    # Execute the task
+    execution = await crawler_manager.execute_task(task_config.task_id)
+    print(f"✅ Task execution started: {execution.execution_id}")
+    
+    # Monitor the task
+    print("📊 Monitoring task execution...")
+    while True:
+        status = crawler_manager.get_task_status(task_config.task_id)
+        if not status:
+            print("❌ Task status not found")
+            break
+            
+        print(f"Status: {status.status}")
+        
+        if status.status in ["completed", "failed", "cancelled"]:
+            if status.status == "completed":
+                print("🎉 Task completed successfully!")
+                print(f"Results: {status.results}")
+            elif status.status == "failed":
+                print(f"❌ Task failed: {status.error_message}")
+            
+            # Show execution log
+            print("\nExecution Log:")
+            for log_entry in status.execution_log:
+                print(f"  - {log_entry}")
+            break
+        
+        await asyncio.sleep(1)
+
+async def collect_journals():
+    """Test the dummy task"""
+    
+    # Manually register the task type first
+    crawler_manager.register_task_type("MiarCubaJournalsCrawler", MiarCubaJournalsCrawler)
+    
+    # Create task configuration
+    await add_execute( CrawlerTaskConfig(
+        task_id="collect_journals",
+        name="Collect cuban journals",
+        description="Collect cuban journals from miar",
+        config={
+            "output": ".data-init/miar-journals-2025.json",
+        },
+    ), "MiarCubaJournalsCrawler")
+
+async def process_miar_journals(): 
+    crawler_manager.register_task_type("MiarDataProcessingTask", MiarDataProcessingTask)
+    
+    await add_execute(CrawlerTaskConfig(
+        task_id="process_collected_journals",
+        name="Process collected cuban journals",
+        config={
+            "output_json_path": ".data-init/miar-journals-2025-process.json",
+            "input_json_path": ".data-init/miar-journals-2025.json",
+        },
+    ), "MiarDataProcessingTask")
+    
+
+async def fix_miar_db(): 
+    crawler_manager.register_task_type("FixMiarIndexs", FixMiarIndexs)
+
+    await add_execute( CrawlerTaskConfig(
+        task_id="fix_miar_db",
+        name="Fix dbs",
+        config={
+            "data_file": ".data-init/miar-db-2019.json"
+        },
+    ), "FixMiarIndexs")
+    
+
+async def collect_miar_db(): 
+    crawler_manager.register_task_type("ColectMiarIndexes", ColectMiarIndexes)
+    
+    await add_execute(CrawlerTaskConfig(
+        task_id="collect_miar_db",
+        name="Collect dbs",
+        config={
+            "output": ".data-init/miar-db-2025.json",
+            "input": ".data-init/miar-db-2025.json",
+        },
+    ), "ColectMiarIndexes")
+    
+
+async def process_scielo(): 
+    crawler_manager.register_task_type("ScieloProcessingTask", ScieloProcessingTask)
+    
+    await add_execute(CrawlerTaskConfig(
+        task_id="process_scielo",
+        name="process scielo dbs",
+        config={
+            "output_json_path": ".data-init/scielo-2025.json"
+        },
+    ), "ScieloProcessingTask")
+    
+
+async def ojs_tasks(): 
+    crawler_manager.register_task_type("OjsProcessingTask", OjsProcessingTask)
+    
+    await add_execute(CrawlerTaskConfig(
+        task_id="ojs_tasks",
+        name="Process urls and ojs tasks",
+        config={
+            "output_json_path": ".data-init/ojs-tasks-2025.json"
+        },
+    ), "OjsProcessingTask")
+    
+
+
+
+if __name__ == "__main__":
+    print("🚀 Starting MIAR Tasks")
+
+    # asyncio.run(fix_miar_db())
+    # asyncio.run(collect_miar_db())
+
+    # asyncio.run(collect_journals())
+    # asyncio.run(process_miar_journals())
+    
+    # asyncio.run(process_scielo())
+    asyncio.run(ojs_tasks())
+    
+    print("🎊 All tasks completed!")
