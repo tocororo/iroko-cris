@@ -5,6 +5,7 @@ import sys
 from pathlib import Path
 
 from iroko.crawler.tasks.ojs import OjsProcessingTask
+from iroko.crawler.tasks.orcid import OrcidDumpProcessingTask
 from iroko.crawler.tasks.organizations import OrganizationsProcessingTask
 from iroko.crawler.tasks.scielo import ScieloProcessingTask
 
@@ -153,6 +154,19 @@ async def organizations_tasks():
     ), "OrganizationsProcessingTask")
     
 
+async def orcid_dump_tasks(): 
+    crawler_manager.register_task_type("OrcidDumpProcessingTask", OrcidDumpProcessingTask)
+    
+    await add_execute(CrawlerTaskConfig(
+        task_id="orcid_dump_task",
+        name="Orcid Dump processing tasks",
+        config={
+            'orcid_dump_path': '.data/orcid/orcid_de_cubanos',
+            'output_json': '.data/orcid/cuban_researchers/output.json',
+            'output_dir': '.data/orcid/cuban_researchers'
+        },
+    ), "OrcidDumpProcessingTask")
+    
 
 
 
@@ -168,7 +182,8 @@ if __name__ == "__main__":
     # asyncio.run(process_scielo())
     # asyncio.run(ojs_tasks())
 
-    asyncio.run(organizations_tasks())
+    # hasyncio.run(organizations_tasks())
     
+    asyncio.run(orcid_dump_tasks())
     
     print("🎊 All tasks completed!")
