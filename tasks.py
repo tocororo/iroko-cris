@@ -5,6 +5,7 @@ import sys
 from pathlib import Path
 
 from iroko.crawler.tasks.ojs import OjsProcessingTask
+from iroko.crawler.tasks.organizations import OrganizationsProcessingTask
 from iroko.crawler.tasks.scielo import ScieloProcessingTask
 
 # Add project root to path
@@ -137,6 +138,22 @@ async def ojs_tasks():
     ), "OjsProcessingTask")
     
 
+async def organizations_tasks(): 
+    crawler_manager.register_task_type("OrganizationsProcessingTask", OrganizationsProcessingTask)
+    
+    await add_execute(CrawlerTaskConfig(
+        task_id="organizations_tasks",
+        name="Process organizations tasks",
+        config={
+            "codepa": ".data-init/orgs-onei-codepa.xlsx", 
+            "diune": ".data-init/orgs-onei-duine-septiembre-2025-fix.xlsx", 
+            "ror": ".data-init/orgs-ror-cuban-records.json",
+            "output": ".data-init/orgs-tasks-2025.json"
+        },
+    ), "OrganizationsProcessingTask")
+    
+
+
 
 
 if __name__ == "__main__":
@@ -149,6 +166,9 @@ if __name__ == "__main__":
     # asyncio.run(process_miar_journals())
     
     # asyncio.run(process_scielo())
-    asyncio.run(ojs_tasks())
+    # asyncio.run(ojs_tasks())
+
+    asyncio.run(organizations_tasks())
+    
     
     print("🎊 All tasks completed!")
