@@ -329,8 +329,22 @@ class OrcidDumpProcessingTask(CrawlerTask):
                 
                 # Check organization name for Cuban indicators
                 org_text = org_name.text.lower() if org_name is not None and org_name.text else ""
-                cuban_keywords = ["cuba", "cuban", "habana", "havana", "santiago de cuba"]
-                
+                cuban_keywords = ["cuba", "cubana", "habana", "havana", "pinar del rio",
+                    "la habana",
+                    "mayabeque",
+                    "matanzas",
+                    "villa clara",
+                    "cienfuegos",
+                    "sancti spiritus",
+                    "ciego de avila",
+                    "camaguey",
+                    "las tunas",
+                    "holguin",
+                    "granma",
+                    "santiago de cuba",
+                    "guantanamo",
+                    "isla de la juventud"]
+                                    
                 if any(keyword in org_text for keyword in cuban_keywords):
                     cuban_employers.append({
                         "organization_name": org_name.text if org_name is not None else "",
@@ -369,8 +383,21 @@ class OrcidDumpProcessingTask(CrawlerTask):
                 # Check for Cuban educational institutions
                 org_text = org_name.text.lower() if org_name is not None and org_name.text else ""
                 cuban_education_keywords = [
-                    "universidad de la habana", "universidad de oriente", 
-                    "universidad de santiago", "instituto superior", "cuba"
+                    "cuba", "cubana", "habana", "havana", "pinar del rio",
+                    "la habana",
+                    "mayabeque",
+                    "matanzas",
+                    "villa clara",
+                    "cienfuegos",
+                    "sancti spiritus",
+                    "ciego de avila",
+                    "camaguey",
+                    "las tunas",
+                    "holguin",
+                    "granma",
+                    "santiago de cuba",
+                    "guantanamo",
+                    "isla de la juventud"
                 ]
                 
                 if any(keyword in org_text for keyword in cuban_education_keywords):
