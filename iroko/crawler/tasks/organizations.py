@@ -58,10 +58,10 @@ class OrganizationsProcessingTask(CrawlerTask):
         session = await neo4j_db.get_session()
         
         try:
-            # # STEP 1: Process codepa
-            # if "codepa" in self.config:
-            #     codepa_path = self.config["codepa"]
-            #     results["step1_codepa_processed"] = await self._process_codepa(session, codepa_path)
+            # STEP 1: Process codepa
+            if "codepa" in self.config:
+                codepa_path = self.config["codepa"]
+                results["step1_codepa_processed"] = await self._process_codepa(session, codepa_path)
             
             # # STEP 2: Clean organization relationships
             results["step2_organizations_cleaned"] = await self._clean_organization_relationships(session)

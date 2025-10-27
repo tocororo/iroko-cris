@@ -1,6 +1,7 @@
 from abc import ABC
 import json
 from pathlib import Path
+import traceback
 from typing import Dict, Any, List, Optional
 import asyncio
 import logging
@@ -411,7 +412,8 @@ class MiarDataProcessingTask(CrawlerTask):
              self.logger.error("Config keys 'output_json_path' and 'input_json_path' must be strings.")
              return False
         return True
-
+    def get_dependencies(self) -> List[str]:
+            return []
 
 class FixMiarIndexs(CrawlerTask):
     """Abstract base class for all crawler tasks"""
@@ -602,17 +604,22 @@ class ColectMiarIndexes(CrawlerTask):
         """
         Extract database names and URLs from MIAR database page and add/update nodes in Neo4j
         """
+        databases = []
         if "input" in self.config:
             with open(self.config['input'], 'r') as f:
-                databases = json.load(f)
+                groups = json.load(f)
+                for g in groups.keys():
+                    for db in groups[g]:
+                        databases.append(db)
+
         else:
             databases = await self.extract_databases_from_miar(client, url)
 
-        sleep_time = randint(1, 5)
-        logger.info(f'sleep {sleep_time}')
-        await asyncio.sleep(sleep_time)
+            sleep_time = randint(1, 5)
+            logger.info(f'sleep {sleep_time}')
+            await asyncio.sleep(sleep_time)
 
-
+        
         # Process the databases in Neo4j
         for db in databases:
             # Cypher query to merge the database node and create the relationship
@@ -670,6 +677,7 @@ class ColectMiarIndexes(CrawlerTask):
                 with open(self.config["output"], "w", encoding="utf-8") as f:
                     json.dump(all_databases, f, ensure_ascii=False, indent=2)
             except Exception as e:
+                print(traceback.format_exc())
                 return {
                     "status": "error",
                     "error": str(e)

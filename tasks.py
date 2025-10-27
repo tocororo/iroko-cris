@@ -61,7 +61,8 @@ async def add_execute(task_config: CrawlerTaskConfig, task_type: str):
         
         await asyncio.sleep(1)
 
-async def collect_journals():
+
+async def collect_miar_journals():
     """Test the dummy task"""
     
     # Manually register the task type first
@@ -77,6 +78,7 @@ async def collect_journals():
         },
     ), "MiarCubaJournalsCrawler")
 
+
 async def process_miar_journals(): 
     crawler_manager.register_task_type("MiarDataProcessingTask", MiarDataProcessingTask)
     
@@ -88,7 +90,7 @@ async def process_miar_journals():
             "input_json_path": ".data-init/miar-journals-2025.json",
         },
     ), "MiarDataProcessingTask")
-    
+
 
 async def fix_miar_db(): 
     crawler_manager.register_task_type("FixMiarIndexs", FixMiarIndexs)
@@ -109,7 +111,7 @@ async def collect_miar_db():
         task_id="collect_miar_db",
         name="Collect dbs",
         config={
-            "output": ".data-init/miar-db-2025.json",
+            "output": ".data-init/miar-db-2025-procesed.json",
             "input": ".data-init/miar-db-2025.json",
         },
     ), "ColectMiarIndexes")
@@ -122,7 +124,8 @@ async def process_scielo():
         task_id="process_scielo",
         name="process scielo dbs",
         config={
-            "output_json_path": ".data-init/scielo-2025.json"
+            "output_json_path": ".data-init/scielo-2025-process.json",
+            "input": ".data-init/scielo-2025.json"
         },
     ), "ScieloProcessingTask")
     
@@ -174,16 +177,16 @@ if __name__ == "__main__":
     print("🚀 Starting MIAR Tasks")
 
     # asyncio.run(fix_miar_db())
-    # asyncio.run(collect_miar_db())
+    asyncio.run(collect_miar_db())
 
-    # asyncio.run(collect_journals())
-    # asyncio.run(process_miar_journals())
+    # asyncio.run(collect_miar_journals())
+    asyncio.run(process_miar_journals())
     
-    # asyncio.run(process_scielo())
-    # asyncio.run(ojs_tasks())
+    asyncio.run(process_scielo())
+    asyncio.run(ojs_tasks())
 
-    # hasyncio.run(organizations_tasks())
+    asyncio.run(organizations_tasks())
     
-    asyncio.run(orcid_dump_tasks())
+    # asyncio.run(orcid_dump_tasks())
     
     print("🎊 All tasks completed!")

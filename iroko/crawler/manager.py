@@ -2,6 +2,7 @@ import asyncio
 import logging
 import importlib
 import pkgutil
+import traceback
 from typing import Dict, List, Optional, Type
 from uuid import uuid4
 from datetime import datetime
@@ -121,10 +122,12 @@ class CrawlerManager:
                     execution.results = results
                     
             except asyncio.TimeoutError:
+                print(traceback.format_exc())
                 logger.error(f"Task {task_id} timed out")
                 execution.status = TaskStatus.FAILED
                 execution.error_message = "Task execution timed out"
             except Exception as e:
+                print(traceback.format_exc())
                 logger.error(f"Task {task_id} failed: {e}")
                 execution.status = TaskStatus.FAILED
                 execution.error_message = str(e)

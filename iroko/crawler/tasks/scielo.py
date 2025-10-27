@@ -2,6 +2,7 @@ import asyncio
 import json
 import logging
 from abc import abstractmethod
+import traceback
 from typing import Dict, Any
 import httpx
 from lxml import html 
@@ -34,54 +35,57 @@ class ScieloProcessingTask(CrawlerTask):
         Execute the Scielo processing task.
         """
         self.logger.info(f"Starting Scielo processing task {self.task_id}")
+        if "input" in self.config:
+            with open(self.config['input'], 'r') as f:
+                data = json.load(f)
+        else: 
+            # --- Step 1: Collect journal list from Scielo website ---
+            url = "http://scielo.sld.cu/scielo.php?script=sci_alphabetic&lng=es&nrm=iso"
+            async with httpx.AsyncClient() as client:
+                response = await client.get(url)
+                response.raise_for_status()
 
-        # --- Step 1: Collect journal list from Scielo website ---
-        url = "http://scielo.sld.cu/scielo.php?script=sci_alphabetic&lng=es&nrm=iso"
-        async with httpx.AsyncClient() as client:
-            response = await client.get(url)
-            response.raise_for_status()
+            tree = html.fromstring(response.content)
 
-        tree = html.fromstring(response.content)
+            data = {"present": [], "no_present": [], "not_found": []}
+            all_journals = []
 
-        data = {"present": [], "no_present": [], "not_found": []}
-        all_journals = []
+            # Find the section for "Títulos vigentes"
+            present_header = tree.xpath("//p[contains(text(), 'Títulos vigentes')]")[0]
+            present_list = present_header.getnext() # The following <ul> element
+            for li in present_list.xpath(".//li"):
+                # Extract title and link
+                link_element = li.xpath(".//a")[0]
+                title = link_element.text_content().strip()
+                link = link_element.get("href")
+                # Extract numbers
+                numbers_text = li.text_content()
+                numbers_match = re.search(r'(\d+)\s*números?', numbers_text)
+                numbers = int(numbers_match.group(1)) if numbers_match else None
+                data["present"].append({"title": title, "link": link, "numbers": numbers, "date": 2025})
+                all_journals.append({"title": title, "link": link, "numbers": numbers, "date": 2025})
 
-        # Find the section for "Títulos vigentes"
-        present_header = tree.xpath("//p[contains(text(), 'Títulos vigentes')]")[0]
-        present_list = present_header.getnext() # The following <ul> element
-        for li in present_list.xpath(".//li"):
-             # Extract title and link
-             link_element = li.xpath(".//a")[0]
-             title = link_element.text_content().strip()
-             link = link_element.get("href")
-             # Extract numbers
-             numbers_text = li.text_content()
-             numbers_match = re.search(r'(\d+)\s*números?', numbers_text)
-             numbers = int(numbers_match.group(1)) if numbers_match else None
-             data["present"].append({"title": title, "link": link, "numbers": numbers, "date": 2025})
-             all_journals.append({"title": title, "link": link, "numbers": numbers, "date": 2025})
+            # Find the section for "Títulos no vigentes"
+            no_present_header = tree.xpath("//p[contains(text(), 'Títulos no vigentes')]")[0]
+            no_present_list = no_present_header.getnext() # The following <ul> element
+            for li in no_present_list.xpath(".//li"):
+                # Extract title and link
+                link_element = li.xpath(".//a")[0]
+                title = link_element.text_content().strip()
+                link = link_element.get("href")
+                # Extract numbers
+                numbers_text = li.text_content()
+                numbers_match = re.search(r'(\d+)\s*números?', numbers_text)
+                numbers = int(numbers_match.group(1)) if numbers_match else None
+                # Extract date
+                date_text = li.text_content()
+                # Look for year after common phrases like "Indización interrumpida", "Terminado"
+                date_match = re.search(r'(?:Indización interrumpida|Terminado)\s+por?\s+el?\s+comité?\s+.*?(\d{4})|(\d{4})\s*:\s*(?:Indización interrumpida|Terminado)', date_text)
+                date = int(date_match.group(1) or date_match.group(2)) if date_match else None
+                data["no_present"].append({"title": title, "link": link, "numbers": numbers, "date": date})
+                all_journals.append({"title": title, "link": link, "numbers": numbers, "date": date})
 
-        # Find the section for "Títulos no vigentes"
-        no_present_header = tree.xpath("//p[contains(text(), 'Títulos no vigentes')]")[0]
-        no_present_list = no_present_header.getnext() # The following <ul> element
-        for li in no_present_list.xpath(".//li"):
-             # Extract title and link
-             link_element = li.xpath(".//a")[0]
-             title = link_element.text_content().strip()
-             link = link_element.get("href")
-             # Extract numbers
-             numbers_text = li.text_content()
-             numbers_match = re.search(r'(\d+)\s*números?', numbers_text)
-             numbers = int(numbers_match.group(1)) if numbers_match else None
-             # Extract date
-             date_text = li.text_content()
-             # Look for year after common phrases like "Indización interrumpida", "Terminado"
-             date_match = re.search(r'(?:Indización interrumpida|Terminado)\s+por?\s+el?\s+comité?\s+.*?(\d{4})|(\d{4})\s*:\s*(?:Indización interrumpida|Terminado)', date_text)
-             date = int(date_match.group(1) or date_match.group(2)) if date_match else None
-             data["no_present"].append({"title": title, "link": link, "numbers": numbers, "date": date})
-             all_journals.append({"title": title, "link": link, "numbers": numbers, "date": date})
-
-        self.logger.info(f"Collected {len(data['present'])} present and {len(data['no_present'])} no present journals.")
+            self.logger.info(f"Collected {len(data['present'])} present and {len(data['no_present'])} no present journals.")
 
         # --- Step 2 & 3: Process each present journal ---
         # Get Neo4j session
@@ -189,6 +193,8 @@ class ScieloProcessingTask(CrawlerTask):
                     data["not_found"].append(journal_info)
                     self.logger.warning(f"Could not find ISSN for journal {journal_info['title']} at {link}.")
 
+        except Exception:
+            print(traceback.format_exc())
         finally:
             await session.close() # Ensure session is closed
 

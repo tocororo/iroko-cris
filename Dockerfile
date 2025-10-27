@@ -46,7 +46,8 @@ COPY --from=builder --chown=iroko:iroko /home/iroko/.local /home/iroko/.local
 RUN ls -lha /home/iroko/.local/lib/python3.12/site-packages
 
 
-COPY .data-init ./.data-init/
+# COPY .data-init ./.data-init/
+
 COPY docs ./docs/
 COPY methodologies ./methodologies/
 
