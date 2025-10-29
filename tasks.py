@@ -164,7 +164,7 @@ async def orcid_dump_tasks():
         task_id="orcid_dump_task",
         name="Orcid Dump processing tasks",
         config={
-            'orcid_dump_path': '.data/orcid/orcid_de_cubanos',
+            'orcid_dump_path': '/media/edel/KINGSTON/ORCID_2025_10_summaries',
             'output_json': '.data/orcid/cuban_researchers/output.json',
             'output_dir': '.data/orcid/cuban_researchers'
         },

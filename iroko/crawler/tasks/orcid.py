@@ -122,7 +122,7 @@ class OrcidDumpProcessingTask(CrawlerTask):
         }
         
         # ORCID dump structure has folders 000, 001, ..., 999 
-        for folder_name in [f"{i:03d}" for i in range(1000)]:
+        for folder_name in os.listdir(base_path):
             folder_path = base_path / folder_name
             
             if not folder_path.exists():
