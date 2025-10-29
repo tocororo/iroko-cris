@@ -15,405 +15,11 @@ from neo4j.graph import Node
 
 from iroko.crawler.schemas import TaskExecution
 from iroko.crawler.task import CrawlerTask
+from iroko.crawler.task import http_task_headers
 from random import randint
 
 logger = logging.getLogger('iroko-cris.crawler')
 
-class MiarCubaJournalsCrawler(CrawlerTask):
-    """Crawler to extract Cuban journals from MIAR and their diffusion metadata."""
-
-    BASE_URL = "https://miar.ub.edu"
-
-    def __init__(self, task_id: str, name: str, config: Dict[str, Any] = None):
-        super().__init__(task_id, name, config)
-        self.session: Optional[httpx.AsyncClient] = None
-
-    def validate_config(self) -> bool:
-        return "output" in self.config
-
-    def get_dependencies(self) -> List[str]:
-        return []
-
-    async def _fetch_html(self, url: str) -> html.HtmlElement:
-        """Fetch URL and return parsed lxml HtmlElement."""
-        if not self.session:
-            raise RuntimeError("HTTP session not initialized")
-        response = await self.session.get(url)
-        response.raise_for_status()
-        return html.fromstring(response.text, base_url=url)
-
-    async def _extract_journal_list(self) -> List[Dict[str, str]]:
-        """Extract full list of Cuban journals using POST with rgs=215."""
-        list_url = f"{self.BASE_URL}/lista/PAIS/--Q1U"
-        
-        # POST data to get all 215 records at once
-        form_data = {
-            "directorio": "miar",
-            "letra": "",
-            "ini": "0",
-            "rgs": "215"
-        }
-
-        if not self.session:
-            raise RuntimeError("HTTP session not initialized")
-        
-        response = await self.session.post(list_url, data=form_data)
-        response.raise_for_status()
-        tree = html.fromstring(response.text, base_url=self.BASE_URL)
-
-        journals = []
-        rows = tree.xpath('//table[@id="tabla-0"]//tbody/tr')
-        
-        for row in rows:
-            issn_cell = row.xpath('.//td[contains(@class, "issn")]/a')
-            title_cell = row.xpath('.//td[contains(@class, "TITLE")]')
-            if issn_cell and title_cell:
-                issn = issn_cell[0].text_content().strip()
-                title = title_cell[0].text_content().strip()
-                detail_url = f"{self.BASE_URL}/issn/{issn}"
-                journals.append({
-                    "issn": issn,
-                    "title": title,
-                    "url": detail_url
-                })
-
-        self.logger.info(f"Successfully extracted {len(journals)} Cuban journals (out of 215 expected).")
-        return journals
-
-    async def _extract_diffusion_data(self, tree: html.HtmlElement) -> Dict[str, List[str]]:
-        """Extract diffusion info from the 'Diffusion' tab content in #Revista section."""
-        diffusion = {
-            "citation_databases": [],
-            "multidisciplinary_databases": [],
-            "specialized_databases": [],
-            "evaluation_resources": []
-        }
-
-        # Specialized databases (table id: tabla-tblE)
-        specialized_rows = tree.xpath('//table[@id="tabla-tblE"]//tr[td/i[@class="glyphicon glyphicon-ok"]]')
-        for row in specialized_rows:
-            db_name = row.xpath('./td[1]/text()')
-            if db_name:
-                diffusion["specialized_databases"].append(db_name[0].strip())
-
-        # Multidisciplinary databases (table id: tabla-tblS)
-        multidisciplinary_rows = tree.xpath('//table[@id="tabla-tblS"]//tr[td/i[@class="glyphicon glyphicon-ok"]]')
-        for row in multidisciplinary_rows:
-            db_name = row.xpath('./td[1]/text()')
-            if db_name:
-                diffusion["multidisciplinary_databases"].append(db_name[0].strip())
-
-        # Citation databases (table id: tabla-tblG)
-        citation_rows = tree.xpath('//table[@id="tabla-tblG"]//tr[td/i[@class="glyphicon glyphicon-ok"]]')
-        for row in citation_rows:
-            db_name = row.xpath('./td[1]/text()')
-            if db_name:
-                diffusion["citation_databases"].append(db_name[0].strip())
-
-        # Evaluation resources (table id: tabla-tblM)
-        evaluation_rows = tree.xpath('//table[@id="tabla-tblM"]//tr[td/i[@class="glyphicon glyphicon-ok"]]')
-        for row in evaluation_rows:
-            db_name = row.xpath('./td[1]/text()')
-            if db_name:
-                diffusion["evaluation_resources"].append(db_name[0].strip())
-
-        return diffusion
-
-    async def _extract_journal_details(self, journal: Dict[str, str]) -> Dict[str, Any]:
-        """Extract full metadata from a journal's detail page."""
-        tree = await self._fetch_html(journal["url"])
-
-        # Basic metadata from #Revista tab
-        title_elem = tree.xpath('//h2[@id="pagina_titulo"]/text()')
-        title = title_elem[0].strip() if title_elem else journal["title"]
-
-        country_elem = tree.xpath('//span[@id="PAIS"]/a/text()')
-        country = country_elem[0].strip() if country_elem else "Cuba"
-
-        url_elem = tree.xpath('//div[@id="divtxt_Revista_7"]/a/@href')
-        url = url_elem[0] if url_elem else ''
-
-        subject_elem = tree.xpath('//span[@id="AMBITO0"]/a/text()')
-        subject = subject_elem[0].strip() if subject_elem else ""
-
-        academic_fields = "; ".join([
-            el.strip() for el in tree.xpath('//div[@id="divtxt_Revista_10"]//a/text()')
-        ])
-
-        # Diffusion data
-        diffusion = await self._extract_diffusion_data(tree)
-        print(url)
-        print('AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAaaa')
-        return {
-            "issn": journal["issn"],
-            "title": title,
-            "url": url,
-            "country": country,
-            "subject": subject,
-            "academic_fields": academic_fields,
-            "diffusion": diffusion
-        }
-
-    async def execute(self, execution: TaskExecution) -> Dict[str, Any]:
-        """Main execution method."""
-        self.logger.info("Starting MIAR Cuba journals crawl task")
-
-        self.session = httpx.AsyncClient(timeout=30.0, follow_redirects=True)
-
-        try:
-            # Step 1: Get list of journals
-            journals_list = await self._extract_journal_list()
-            if not journals_list:
-                self.logger.warning("No journals found on list page")
-                return {"success": False, "error": "No journals found"}
-
-            # Step 2: Crawl each journal detail page
-            results = []
-            total = len(journals_list)
-            for i, journal in enumerate(journals_list, 1):
-                self.logger.info(f"Processing {i}/{total}: {journal['issn']} - {journal['title']}")
-                try:
-                    details = await self._extract_journal_details(journal)
-                    results.append(details)
-                except Exception as e:
-                    self.logger.error(f"Error processing {journal['issn']}: {e}")
-                    continue
-
-                # Be respectful: small delay between requests
-                sleep_time = randint(1, 4)
-                self.logger.info(f'sleep {sleep_time}')
-                await asyncio.sleep(sleep_time)
-
-
-            result = {
-                "success": True,
-                "journals_count": len(results),
-                "journals": results,
-                
-            }
-            self.logger.info(f"Successfully extracted data for {len(results)} journals")
-            with open(self.config["output"], "w", encoding="utf-8") as f:
-                json.dump(result, f, ensure_ascii=False, indent=2)
-
-            return result
-
-        finally:
-            if self.session:
-                await self.session.aclose()
-
-
-class MiarDataProcessingTask(CrawlerTask):
-    """Task to process MIAR journal data and update Neo4j database."""
-
-    def __init__(self, task_id: str, name: str, config: Dict[str, Any] = None):
-        super().__init__(task_id, name, config)
-        self.output_path = self.config.get('output_json_path')
-        self.input_path = self.config.get('input_json_path')
-        if not self.output_path or not self.input_path:
-            raise ValueError("Config must contain 'output_json_path' and 'input_json_path'.")
-
-    async def execute(self, execution: TaskExecution) -> Dict[str, Any]:
-        """
-        Execute the MIAR data processing task.
-        """
-        self.logger.info(f"Starting MIAR data processing task {self.task_id}")
-
-        # Read input JSON data
-        try:
-            with open(self.input_path, 'r', encoding='utf-8') as f:
-                data = json.load(f)
-        except FileNotFoundError:
-            self.logger.error(f"Input file not found: {self.input_path}")
-            raise
-        except json.JSONDecodeError:
-            self.logger.error(f"Invalid JSON in input file: {self.input_path}")
-            raise
-
-        if not data.get("success", False):
-            self.logger.error(f"Input data indicates failure: {self.input_path}")
-            raise ValueError("Input data indicates failure.")
-
-        journals = data.get("journals", [])
-        self.logger.info(f"Processing {len(journals)} journals from input data.")
-
-        # Initialize output structure
-        output_results = {
-            "issn": [],
-            "name": [],
-            "new": [],
-            "index_not_found": [],
-            "old_index": []
-        }
-
-        # Get Neo4j session
-        session = await neo4j_db.get_session()
-        
-        try:
-            # --- Step 1: Process Journals ---
-            for journal in journals:
-                issn = journal.get("issn")
-                title = journal.get("title")
-                url = journal.get("url")
-                pub_node_id = None # To store the ID of the found/created Publication node
-
-                # Query 1: Find by ISSN
-                query_find_by_issn = (
-                    "MATCH (p:Publication) WHERE "
-                    "p.`identifier#issn_p` = $issn OR "
-                    "p.`identifier#issn_e` = $issn OR "
-                    "p.`identifier#issn_l` = $issn OR "
-                    "p.`identifier#issn_o` = $issn OR "
-                    "p.`identifier#issn_c` = $issn "
-                    "RETURN p"
-                )
-                result_issn = await session.run(query_find_by_issn, issn=issn)
-                pub_record = await result_issn.single()
-
-                if pub_record:
-                    self.logger.debug(f"Found journal {title} by ISSN {issn}.")
-                    output_results["issn"].append(issn)
-                    pub_node_id = pub_record["p"]._id # Store node ID for later use
-                else:
-                    # Query 2: Find by Name/Title
-                    query_find_by_name = (
-                        "MATCH (p:Publication) WHERE p.name = $title RETURN p"
-                    )
-                    result_name = await session.run(query_find_by_name, title=title)
-                    pub_record = await result_name.single()
-
-                    if pub_record:
-                        self.logger.debug(f"Found journal {issn} by name {title}.")
-                        output_results["name"].append(issn)
-                        pub_node_id = pub_record["p"]._id
-                    else:
-                        # Query 3: Create new Publication node
-                        query_create_pub = (
-                            "CREATE (p:Publication { name: $name, `identifier#issn_e`: $issn, `identifier#issn_l`: $issn, `identifier#url`: $url }) RETURN p"
-                        )
-                        result_create = await session.run(query_create_pub, name=title, issn=issn, url=url)
-                        new_pub_record = await result_create.single()
-                        if new_pub_record:
-                            self.logger.debug(f"Created new journal node for {title} with ISSN {issn}, url={url}.")
-                            output_results["new"].append(issn)
-                            pub_node_id = new_pub_record["p"]._id
-
-                # --- Step 2: Process Diffusion Data for the current Publication ---
-                if pub_node_id is not None: # Only proceed if a Publication node was found or created
-                    if url is not None and url!= "":
-                        self.logger.debug(f"update url:{url} if needed...")
-                        query_update_url = (
-                            """
-                            MATCH (p:Publication) 
-                            WHERE p.id = $pub_id AND 
-                            (p.`identifier#url` IS NULL OR p.`identifier#url` = "") 
-                            SET p.`identifier#url` = $url
-                            """)
-                        await session.run(query_update_url, pub_id=pub_node_id, url=url)
-
-                    diffusion = journal.get("diffusion", {})
-                    all_db_strings = []
-                    for category, db_list in diffusion.items():
-                        if isinstance(db_list, list):
-                             all_db_strings.extend(db_list)
-
-                    for index_name in all_db_strings:
-                        # Query 4: Find Index node
-                        query_find_index = (
-                            "MATCH (i:Index) WHERE i.name = $index_name RETURN i"
-                        )
-                        result_index = await session.run(query_find_index, index_name=index_name)
-                        index_record = await result_index.single()
-
-                        if index_record:
-                            index_node_id = index_record["i"]._id
-                            # Query 5: Check for existing IN_INDEX relationship
-                            query_check_rel = (
-                                "MATCH (p) WHERE p.id = $pub_id "
-                                "MATCH (i) WHERE i.id = $index_id "
-                                "OPTIONAL MATCH (p)-[r:IN_INDEX]->(i) "
-                                "RETURN r"
-                            )
-                            result_rel = await session.run(query_check_rel, pub_id=pub_node_id, index_id=index_node_id)
-                            rel_record = await result_rel.single()
-
-                            if rel_record and rel_record["r"] is not None:
-                                # Relationship exists, update its properties
-                                rel_id = rel_record["r"]._id
-                                query_update_rel = (
-                                    "MATCH ()-[r:IN_INDEX]->() WHERE r.id = $rel_id "
-                                    "SET r.source = $source, r.date = $date"
-                                )
-                                await session.run(query_update_rel, rel_id=rel_id, source="MIAR", date=2025)
-                                self.logger.debug(f"Updated existing IN_INDEX relationship for {title} ({issn}) and {index_name}.")
-                            else:
-                                # Relationship does not exist, create it
-                                query_create_rel = (
-                                    "MATCH (p) WHERE p.id = $pub_id "
-                                    "MATCH (i) WHERE i.id = $index_id "
-                                    "CREATE (p)-[:IN_INDEX {source: $source, date: $date}]->(i)"
-                                )
-                                await session.run(query_create_rel, pub_id=pub_node_id, index_id=index_node_id, source="MIAR", date=2025)
-                                self.logger.debug(f"Created new IN_INDEX relationship for {title} ({issn}) and {index_name}.")
-                        else:
-                            # Index not found in DB
-                            self.logger.warning(f"Index '{index_name}' from journal {issn} not found in Neo4j database.")
-                            if index_name not in output_results["index_not_found"]:
-                                output_results["index_not_found"].append(index_name)
-
-
-            # --- Step 3: Process old IN_INDEX relationships ---
-            # Query 6: Find IN_INDEX relationships without required properties
-            query_find_old_rels = (
-                "MATCH (p:Publication)-[r:IN_INDEX]->(i:Index) "
-                "WHERE NOT (r.source IS NOT NULL AND r.date IS NOT NULL) "
-                "RETURN i.name AS index_name, r.id AS rel_id"
-            )
-            result_old_rels = await session.run(query_find_old_rels)
-            async for record in result_old_rels:
-                 index_name = record["index_name"]
-                 rel_id = record["rel_id"]
-                 output_results["old_index"].append(index_name)
-                 # Query 7: Update the old relationship properties
-                 query_update_old_rel = (
-                     "MATCH ()-[r:IN_INDEX]->() WHERE r.id = $rel_id "
-                     "SET r.source = $source, r.date = $date"
-                 )
-                 await session.run(query_update_old_rel, rel_id=rel_id, source="MIAR", date=2022)
-                 self.logger.debug(f"Updated old IN_INDEX relationship for Index: {index_name}.")
-
-        finally:
-            await session.close() # Ensure session is closed
-
-        # Write output results to file
-        try:
-            with open(self.output_path, 'w', encoding='utf-8') as f:
-                json.dump(output_results, f, indent=2, ensure_ascii=False)
-            self.logger.info(f"Output results written to {self.output_path}")
-        except Exception as e:
-            self.logger.error(f"Failed to write output file {self.output_path}: {e}")
-            raise # Re-raise to fail the task
-
-        self.logger.info(f"Completed MIAR data processing task {self.task_id}")
-        return output_results
-
-
-    def validate_config(self) -> bool:
-        """
-        Validate task configuration.
-        Requires 'output_json_path' and 'input_json_path'.
-        """
-        required_keys = ['output_json_path', 'input_json_path']
-        for key in required_keys:
-            if key not in self.config or not self.config[key]:
-                self.logger.error(f"Missing or empty required config key: {key}")
-                return False
-        # Validate paths are strings
-        if not isinstance(self.config['output_json_path'], str) or not isinstance(self.config['input_json_path'], str):
-             self.logger.error("Config keys 'output_json_path' and 'input_json_path' must be strings.")
-             return False
-        return True
-    def get_dependencies(self) -> List[str]:
-            return []
 
 class FixMiarIndexs(CrawlerTask):
     """Abstract base class for all crawler tasks"""
@@ -653,9 +259,7 @@ class ColectMiarIndexes(CrawlerTask):
         execution.execution_log.append("load data")
         session = await neo4j_db.get_session()
         async with httpx.AsyncClient(
-            headers={
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-            },
+            headers=http_task_headers,
             timeout=30.0
         ) as client:
             try:
@@ -707,4 +311,406 @@ class ColectMiarIndexes(CrawlerTask):
             List of task IDs
         """
         return []
+
+
+class MiarCubaJournalsCrawler(CrawlerTask):
+    """Crawler to extract Cuban journals from MIAR and their diffusion metadata."""
+
+    BASE_URL = "https://miar.ub.edu"
+
+    def __init__(self, task_id: str, name: str, config: Dict[str, Any] = None):
+        super().__init__(task_id, name, config)
+        self.session: Optional[httpx.AsyncClient] = None
+
+    def validate_config(self) -> bool:
+        return "output" in self.config
+
+    def get_dependencies(self) -> List[str]:
+        return []
+
+    async def _fetch_html(self, url: str) -> html.HtmlElement:
+        """Fetch URL and return parsed lxml HtmlElement."""
+        if not self.session:
+            raise RuntimeError("HTTP session not initialized")
+        response = await self.session.get(url)
+        response.raise_for_status()
+        return html.fromstring(response.text, base_url=url)
+
+    async def _extract_journal_list(self) -> List[Dict[str, str]]:
+        """Extract full list of Cuban journals using POST with rgs=215."""
+        list_url = f"{self.BASE_URL}/lista/PAIS/--Q1U"
+        
+        # POST data to get all 215 records at once
+        form_data = {
+            "directorio": "miar",
+            "letra": "",
+            "ini": "0",
+            "rgs": "215"
+        }
+
+        if not self.session:
+            raise RuntimeError("HTTP session not initialized")
+        
+        response = await self.session.post(list_url, data=form_data)
+        response.raise_for_status()
+        tree = html.fromstring(response.text, base_url=self.BASE_URL)
+
+        journals = []
+        rows = tree.xpath('//table[@id="tabla-0"]//tbody/tr')
+        
+        for row in rows:
+            issn_cell = row.xpath('.//td[contains(@class, "issn")]/a')
+            title_cell = row.xpath('.//td[contains(@class, "TITLE")]')
+            if issn_cell and title_cell:
+                issn = issn_cell[0].text_content().strip()
+                title = title_cell[0].text_content().strip()
+                detail_url = f"{self.BASE_URL}/issn/{issn}"
+                journals.append({
+                    "issn": issn,
+                    "title": title,
+                    "url": detail_url
+                })
+
+        self.logger.info(f"Successfully extracted {len(journals)} Cuban journals (out of 215 expected).")
+        return journals
+
+    async def _extract_diffusion_data(self, tree: html.HtmlElement) -> Dict[str, List[str]]:
+        """Extract diffusion info from the 'Diffusion' tab content in #Revista section."""
+        diffusion = {
+            "citation_databases": [],
+            "multidisciplinary_databases": [],
+            "specialized_databases": [],
+            "evaluation_resources": []
+        }
+
+        # Specialized databases (table id: tabla-tblE)
+        specialized_rows = tree.xpath('//table[@id="tabla-tblE"]//tr[td/i[@class="glyphicon glyphicon-ok"]]')
+        for row in specialized_rows:
+            db_name = row.xpath('./td[1]/text()')
+            if db_name:
+                diffusion["specialized_databases"].append(db_name[0].strip())
+
+        # Multidisciplinary databases (table id: tabla-tblS)
+        multidisciplinary_rows = tree.xpath('//table[@id="tabla-tblS"]//tr[td/i[@class="glyphicon glyphicon-ok"]]')
+        for row in multidisciplinary_rows:
+            db_name = row.xpath('./td[1]/text()')
+            if db_name:
+                diffusion["multidisciplinary_databases"].append(db_name[0].strip())
+
+        # Citation databases (table id: tabla-tblG)
+        citation_rows = tree.xpath('//table[@id="tabla-tblG"]//tr[td/i[@class="glyphicon glyphicon-ok"]]')
+        for row in citation_rows:
+            db_name = row.xpath('./td[1]/text()')
+            if db_name:
+                diffusion["citation_databases"].append(db_name[0].strip())
+
+        # Evaluation resources (table id: tabla-tblM)
+        evaluation_rows = tree.xpath('//table[@id="tabla-tblM"]//tr[td/i[@class="glyphicon glyphicon-ok"]]')
+        for row in evaluation_rows:
+            db_name = row.xpath('./td[1]/text()')
+            if db_name:
+                diffusion["evaluation_resources"].append(db_name[0].strip())
+
+        return diffusion
+
+    async def _extract_journal_details(self, journal: Dict[str, str]) -> Dict[str, Any]:
+        """Extract full metadata from a journal's detail page."""
+        tree = await self._fetch_html(journal["url"])
+
+        # Basic metadata from #Revista tab
+        title_elem = tree.xpath('//h2[@id="pagina_titulo"]/text()')
+        title = title_elem[0].strip() if title_elem else journal["title"]
+
+        country_elem = tree.xpath('//span[@id="PAIS"]/a/text()')
+        country = country_elem[0].strip() if country_elem else "Cuba"
+
+        url_elem = tree.xpath('//div[@id="divtxt_Revista_7"]/a/@href')
+        url = url_elem[0] if url_elem else ''
+
+        subject_elem = tree.xpath('//span[@id="AMBITO0"]/a/text()')
+        subject = subject_elem[0].strip() if subject_elem else ""
+
+        academic_fields = "; ".join([
+            el.strip() for el in tree.xpath('//div[@id="divtxt_Revista_10"]//a/text()')
+        ])
+
+        # Diffusion data
+        diffusion = await self._extract_diffusion_data(tree)
+        print(url)
+        print('AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAaaa')
+        return {
+            "issn": journal["issn"],
+            "title": title,
+            "url": url,
+            "country": country,
+            "subject": subject,
+            "academic_fields": academic_fields,
+            "diffusion": diffusion
+        }
+
+    async def execute(self, execution: TaskExecution) -> Dict[str, Any]:
+        """Main execution method."""
+        self.logger.info("Starting MIAR Cuba journals crawl task")
+
+        self.session = httpx.AsyncClient(headers=http_task_headers,timeout=30.0, follow_redirects=True)
+
+        try:
+            # Step 1: Get list of journals
+            journals_list = await self._extract_journal_list()
+            if not journals_list:
+                self.logger.warning("No journals found on list page")
+                return {"success": False, "error": "No journals found"}
+
+            # Step 2: Crawl each journal detail page
+            results = []
+            total = len(journals_list)
+            for i, journal in enumerate(journals_list, 1):
+                self.logger.info(f"Processing {i}/{total}: {journal['issn']} - {journal['title']}")
+                try:
+                    details = await self._extract_journal_details(journal)
+                    results.append(details)
+                except Exception as e:
+                    self.logger.error(f"Error processing {journal['issn']}: {e}")
+                    continue
+
+                # Be respectful: small delay between requests
+                sleep_time = randint(1, 4)
+                self.logger.info(f'sleep {sleep_time}')
+                await asyncio.sleep(sleep_time)
+
+
+            result = {
+                "success": True,
+                "journals_count": len(results),
+                "journals": results,
+                
+            }
+            self.logger.info(f"Successfully extracted data for {len(results)} journals")
+            with open(self.config["output"], "w", encoding="utf-8") as f:
+                json.dump(result, f, ensure_ascii=False, indent=2)
+
+            return result
+
+        finally:
+            if self.session:
+                await self.session.aclose()
+
+
+class MiarJournalsProcessingTask(CrawlerTask):
+    """Task to process MIAR journal data and update Neo4j database."""
+
+    def __init__(self, task_id: str, name: str, config: Dict[str, Any] = None):
+        super().__init__(task_id, name, config)
+        self.output_path = self.config.get('output_json_path')
+        self.input_path = self.config.get('input_json_path')
+        if not self.output_path or not self.input_path:
+            raise ValueError("Config must contain 'output_json_path' and 'input_json_path'.")
+
+    async def execute(self, execution: TaskExecution) -> Dict[str, Any]:
+        """
+        Execute the MIAR data processing task.
+        """
+        self.logger.info(f"Starting MIAR data processing task {self.task_id}")
+
+        # Read input JSON data
+        try:
+            with open(self.input_path, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+        except FileNotFoundError:
+            self.logger.error(f"Input file not found: {self.input_path}")
+            raise
+        except json.JSONDecodeError:
+            self.logger.error(f"Invalid JSON in input file: {self.input_path}")
+            raise
+
+        if not data.get("success", False):
+            self.logger.error(f"Input data indicates failure: {self.input_path}")
+            raise ValueError("Input data indicates failure.")
+
+        journals = data.get("journals", [])
+        self.logger.info(f"Processing {len(journals)} journals from input data.")
+
+        # Initialize output structure
+        output_results = {
+            "issn": [],
+            "name": [],
+            "new": [],
+            "index_not_found": [],
+            "old_index": []
+        }
+
+        # Get Neo4j session
+        session = await neo4j_db.get_session()
+        
+        try:
+            # --- Step 1: Process Journals ---
+            for journal in journals:
+                issn = journal.get("issn")
+                title = journal.get("title")
+                url = journal.get("url")
+                pub_node_id = None  # To store the ID of the found/created Publication node
+
+                if not issn:
+                    self.logger.warning(f"Journal missing ISSN, skipping: {title}")
+                    continue
+
+                # Query 1: Find by ISSN
+                query_find_by_issn = (
+                    "MATCH (p:Publication) WHERE "
+                    "p.`identifier#issn_p` = $issn OR "
+                    "p.`identifier#issn_e` = $issn OR "
+                    "p.`identifier#issn_l` = $issn OR "
+                    "p.`identifier#issn_o` = $issn OR "
+                    "p.`identifier#issn_c` = $issn "
+                    "RETURN id(p) as node_id"  # Use id() function instead of _id
+                )
+                result_issn = await session.run(query_find_by_issn, issn=issn)
+                pub_record = await result_issn.single()
+
+                if pub_record:
+                    self.logger.debug(f"Found journal {title} by ISSN {issn}.")
+                    output_results["issn"].append(issn)
+                    pub_node_id = pub_record["node_id"]  # Store node ID for later use
+                else:
+                    # Query 2: Find by Name/Title
+                    query_find_by_name = (
+                        "MATCH (p:Publication) WHERE p.name = $title RETURN id(p) as node_id"
+                    )
+                    result_name = await session.run(query_find_by_name, title=title)
+                    pub_record = await result_name.single()
+
+                    if pub_record:
+                        self.logger.debug(f"Found journal {issn} by name {title}.")
+                        output_results["name"].append(issn)
+                        pub_node_id = pub_record["node_id"]
+                    else:
+                        # Query 3: Create new Publication node
+                        query_create_pub = (
+                            "CREATE (p:Publication { name: $name, `identifier#issn_e`: $issn, `identifier#issn_l`: $issn, `identifier#url`: $url }) RETURN id(p) as node_id"
+                        )
+                        result_create = await session.run(query_create_pub, name=title, issn=issn, url=url)
+                        new_pub_record = await result_create.single()
+                        if new_pub_record:
+                            self.logger.debug(f"Created new journal node for {title} with ISSN {issn}, url={url}.")
+                            output_results["new"].append(issn)
+                            pub_node_id = new_pub_record["node_id"]
+
+                # --- Step 2: Process Diffusion Data for the current Publication ---
+                if pub_node_id is not None:  # Only proceed if a Publication node was found or created
+                    if url and url.strip():
+                        self.logger.debug(f"Updating url:{url} if needed...")
+                        query_update_url = (
+                            """
+                            MATCH (p:Publication) 
+                            WHERE id(p) = $pub_id AND 
+                            (p.`identifier#url` IS NULL OR p.`identifier#url` = "") 
+                            SET p.`identifier#url` = $url
+                            """
+                        )
+                        await session.run(query_update_url, pub_id=pub_node_id, url=url)
+
+                    diffusion = journal.get("diffusion", {})
+                    all_db_strings = []
+                    for category, db_list in diffusion.items():
+                        if isinstance(db_list, list):
+                            all_db_strings.extend(db_list)
+
+                    for index_name in all_db_strings:
+                        # Query 4: Find Index node
+                        query_find_index = (
+                            "MATCH (i:Index) WHERE i.name = $index_name RETURN id(i) as node_id"
+                        )
+                        result_index = await session.run(query_find_index, index_name=index_name)
+                        index_record = await result_index.single()
+
+                        if index_record:
+                            index_node_id = index_record["node_id"]
+                            # Query 5: Check for existing IN_INDEX relationship
+                            query_check_rel = (
+                                "MATCH (p) WHERE id(p) = $pub_id "
+                                "MATCH (i) WHERE id(i) = $index_id "
+                                "OPTIONAL MATCH (p)-[r:IN_INDEX]->(i) "
+                                "RETURN id(r) as rel_id"  # Use id() function
+                            )
+                            result_rel = await session.run(query_check_rel, pub_id=pub_node_id, index_id=index_node_id)
+                            rel_record = await result_rel.single()
+
+                            if rel_record and rel_record["rel_id"] is not None:
+                                # Relationship exists, update its properties
+                                rel_id = rel_record["rel_id"]
+                                query_update_rel = (
+                                    "MATCH ()-[r:IN_INDEX]->() WHERE id(r) = $rel_id "
+                                    "SET r.source = $source, r.date = $date"
+                                )
+                                await session.run(query_update_rel, rel_id=rel_id, source="MIAR", date=2025)
+                                self.logger.debug(f"Updated existing IN_INDEX relationship for {title} ({issn}) and {index_name}.")
+                            else:
+                                # Relationship does not exist, create it
+                                query_create_rel = (
+                                    "MATCH (p) WHERE id(p) = $pub_id "
+                                    "MATCH (i) WHERE id(i) = $index_id "
+                                    "CREATE (p)-[:IN_INDEX {source: $source, date: $date}]->(i)"
+                                )
+                                await session.run(query_create_rel, pub_id=pub_node_id, index_id=index_node_id, source="MIAR", date=2025)
+                                self.logger.debug(f"Created new IN_INDEX relationship for {title} ({issn}) and {index_name}.")
+                        else:
+                            # Index not found in DB
+                            self.logger.warning(f"Index '{index_name}' from journal {issn} not found in Neo4j database.")
+                            if index_name not in output_results["index_not_found"]:
+                                output_results["index_not_found"].append(index_name)
+
+            # --- Step 3: Process old IN_INDEX relationships ---
+            # Query 6: Find IN_INDEX relationships without required properties
+            # Use NULL checks instead of NOT EXISTS to avoid property key warnings
+            query_find_old_rels = (
+                "MATCH (p:Publication)-[r:IN_INDEX]->(i:Index) "
+                "WHERE r.source IS NULL OR r.date IS NULL "  # Simple NULL checks
+                "RETURN i.name AS index_name, id(r) AS rel_id"  # Use id() function
+            )
+            result_old_rels = await session.run(query_find_old_rels)
+            async for record in result_old_rels:
+                index_name = record["index_name"]
+                rel_id = record["rel_id"]
+                output_results["old_index"].append(index_name)
+                # Query 7: Update the old relationship properties
+                query_update_old_rel = (
+                    "MATCH ()-[r:IN_INDEX]->() WHERE id(r) = $rel_id "
+                    "SET r.source = $source, r.date = $date"
+                )
+                await session.run(query_update_old_rel, rel_id=rel_id, source="MIAR", date=2022)
+                self.logger.debug(f"Updated old IN_INDEX relationship for Index: {index_name}.")
+
+        finally:
+            await session.close()  # Ensure session is closed
+
+        # Write output results to file
+        try:
+            with open(self.output_path, 'w', encoding='utf-8') as f:
+                json.dump(output_results, f, indent=2, ensure_ascii=False)
+            self.logger.info(f"Output results written to {self.output_path}")
+        except Exception as e:
+            self.logger.error(f"Failed to write output file {self.output_path}: {e}")
+            raise  # Re-raise to fail the task
+
+        self.logger.info(f"Completed MIAR data processing task {self.task_id}")
+        return output_results
+
+
+    def validate_config(self) -> bool:
+        """
+        Validate task configuration.
+        Requires 'output_json_path' and 'input_json_path'.
+        """
+        required_keys = ['output_json_path', 'input_json_path']
+        for key in required_keys:
+            if key not in self.config or not self.config[key]:
+                self.logger.error(f"Missing or empty required config key: {key}")
+                return False
+        # Validate paths are strings
+        if not isinstance(self.config['output_json_path'], str) or not isinstance(self.config['input_json_path'], str):
+             self.logger.error("Config keys 'output_json_path' and 'input_json_path' must be strings.")
+             return False
+        return True
+    def get_dependencies(self) -> List[str]:
+            return []
 

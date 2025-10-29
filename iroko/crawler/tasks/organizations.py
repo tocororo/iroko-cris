@@ -192,40 +192,99 @@ class OrganizationsProcessingTask(CrawlerTask):
             if not codigo:
                 continue
                 
-            # Check if organization already exists
-            old_identifier = f"reup.{codigo}"
+            # Handle the codigo formatting issue: remove leading zeros for matching with reup identifiers
+            codigo_normalized = codigo.lstrip('0')  # Remove leading zeros
+            if not codigo_normalized:  # If codigo was all zeros, keep at least one zero
+                codigo_normalized = "0"
+                
+            old_identifier = f"reup.{codigo_normalized}"
             new_identifier = f"onei.diune.{codigo}"
-            
-            # Update existing node
-            query = """
-            MATCH (org:Organization {`identifier#reup`: $old_identifier})
-            SET org.`identifier#onei` = $new_identifier,
-                org.descripcion = $descripcion,
-                org.descripcion_nae = $descripcion_nae,
-                org.descripcion_cnae = $descripcion_cnae,
-                org.forma_organizativa = $forma_organizativa
-            REMOVE org.`identifier#reup`
+                        
+            # First, try to find node by the new identifier (in case this is a subsequent run)
+            query_check_new = """
+            MATCH (org:Organization {`identifier#onei`: $new_identifier})
+            RETURN org
             """
-            
-            result = await session.run(
-                query,
-                old_identifier=old_identifier,
-                new_identifier=new_identifier,
-                descripcion=record.get("descripcion"),
-                descripcion_nae=record.get("descripcion_nae"),
-                descripcion_cnae=record.get("descripcion_cnae"),
-                forma_organizativa=record.get("desfo")
-            )
-            
-            # Check if any node was updated
-            summary = await result.consume()
-            if summary.counters.properties_set > 0:
-                # Node was updated
+
+            result_new = await session.run(query_check_new, new_identifier=new_identifier)
+            existing_with_new = await result_new.single()
+
+            if existing_with_new:
+                
+                # check if there is also a node with the older identifier
+                q_check_old = """
+                MATCH (org:Organization {`identifier#reup`: $old_identifier})
+                RETURN org
+                """
+                result_old = await session.run(q_check_old, old_identifier=old_identifier)
+                existing_with_old = await result_old.single()
+                
+                if existing_with_old:
+                    # Keep the old node and update it with new identifier and properties, then delete the new duplicate
+                    merge_query = """
+                    MATCH (new_org:Organization {`identifier#onei`: $new_identifier})
+                    MATCH (old_org:Organization {`identifier#reup`: $old_identifier})
+                    
+                    // Update the old node with new identifier and properties
+                    WITH old_org, new_org
+                    SET old_org.`identifier#onei` = $new_identifier,
+                        old_org.descripcion = $descripcion,
+                        old_org.descripcion_nae = $descripcion_nae,
+                        old_org.descripcion_cnae = $descripcion_cnae,
+                        old_org.forma_organizativa = $forma_organizativa,
+                        old_org.name = coalesce(old_org.name, new_org.name, $descripcion)
+                    REMOVE old_org.`identifier#reup`
+                    
+                    // Finally, delete the new duplicate node
+                    WITH new_org
+                    DETACH DELETE new_org
+                    
+                    RETURN count(*) as merged_count
+                    """
+                    
+                    result = await session.run(
+                        merge_query,
+                        new_identifier=new_identifier,
+                        old_identifier=old_identifier,
+                        descripcion=record.get("descripcion"),
+                        descripcion_nae=record.get("descripcion_nae"),
+                        descripcion_cnae=record.get("descripcion_cnae"),
+                        forma_organizativa=record.get("desfo")
+                    )
+                    
+                    summary = await result.consume()
+                    processed_count += 1
+                    
+                    self.logger.info(f"Merged duplicate nodes: kept {old_identifier} with new identifier {new_identifier}")
+                    
+                else:
+                    # Node already exists with the new identifier, just update it
+                    update_query = """
+                    MATCH (org:Organization {`identifier#onei`: $new_identifier})
+                    SET org.descripcion = $descripcion,
+                        org.descripcion_nae = $descripcion_nae,
+                        org.descripcion_cnae = $descripcion_cnae,
+                        org.forma_organizativa = $forma_organizativa
+                    """
+                    
+                    result = await session.run(
+                        update_query,
+                        new_identifier=new_identifier,
+                        descripcion=record.get("descripcion"),
+                        descripcion_nae=record.get("descripcion_nae"),
+                        descripcion_cnae=record.get("descripcion_cnae"),
+                        forma_organizativa=record.get("desfo")
+                    )
+                    
+                    summary = await result.consume()
+                    if summary.counters.properties_set > 0:
+                        processed_count += 1
+                
+                # Update DPA relationship if needed (for both cases)
                 dpa_code = record.get("dpa")
                 if dpa_code:
                     dpa_identifier = f"onei.dpa.{dpa_code}"
                     
-                    # Create relationship with DPA node
                     query = """
                     MATCH (org:Organization {`identifier#onei`: $org_identifier})
                     MATCH (dpa:DPA {`identifier#onei`: $dpa_identifier})
@@ -238,15 +297,66 @@ class OrganizationsProcessingTask(CrawlerTask):
                         dpa_identifier=dpa_identifier
                     )
                 
-                processed_count += 1
+                continue
+            
+            # If not found with new identifier, try to find with old reup identifier
+            q_check_old = """
+            MATCH (org:Organization {`identifier#reup`: $old_identifier})
+            RETURN org
+            """
+            
+            result_old = await session.run(q_check_old, old_identifier=old_identifier)
+            existing_with_old = await result_old.single()
+            
+            if existing_with_old:
+                # Update existing node from reup to onei identifier
+                query = """
+                MATCH (org:Organization {`identifier#reup`: $old_identifier})
+                SET org.`identifier#onei` = $new_identifier,
+                    org.descripcion = $descripcion,
+                    org.descripcion_nae = $descripcion_nae,
+                    org.descripcion_cnae = $descripcion_cnae,
+                    org.forma_organizativa = $forma_organizativa
+                REMOVE org.`identifier#reup`
+                """
+                
+                result = await session.run(
+                    query,
+                    old_identifier=old_identifier,
+                    new_identifier=new_identifier,
+                    descripcion=record.get("descripcion"),
+                    descripcion_nae=record.get("descripcion_nae"),
+                    descripcion_cnae=record.get("descripcion_cnae"),
+                    forma_organizativa=record.get("desfo")
+                )
+                
+                summary = await result.consume()
+                if summary.counters.properties_set > 0:
+                    dpa_code = record.get("dpa")
+                    if dpa_code:
+                        dpa_identifier = f"onei.dpa.{dpa_code}"
+                        
+                        # Create relationship with DPA node
+                        query = """
+                        MATCH (org:Organization {`identifier#onei`: $org_identifier})
+                        MATCH (dpa:DPA {`identifier#onei`: $dpa_identifier})
+                        MERGE (org)-[:IN_DPA]->(dpa)
+                        """
+                        
+                        await session.run(
+                            query,
+                            org_identifier=new_identifier,
+                            dpa_identifier=dpa_identifier
+                        )
+                    
+                    processed_count += 1
             else:
-                # Node was not found, check if we should create it based on keywords
+                # Node was not found with either identifier, check if we should create it based on keywords
                 descripcion = record.get("descripcion")
                 descripcion_cnae = record.get("descripcion_cnae", "")
                 descripcion_nae = record.get("descripcion_nae", "")
                 
                 # Define keywords that indicate we should create the node
-                # This is a sample list - you can customize based on your requirements
                 keywords = ["ciencia", "investigacion", "INVESTIGACIONES", "ciencias", 
                         "universidad", "laboratorio", "instituto","cientifica", "cientificas"]
                 
@@ -312,10 +422,6 @@ class OrganizationsProcessingTask(CrawlerTask):
                     processed_count += 1
         
         self.logger.info(f"Processed {processed_count} organizations from diune, {len(created_nodes)} created")
-        return {
-            "step3_diune_processed": processed_count,
-            "created_nodes": created_nodes
-        }
         return processed_count
 
     async def _process_ror(self, session, ror_path: str) -> Dict[str, Any]:

@@ -6,7 +6,7 @@ import httpx
 from lxml import html
 from iroko.crawler.schemas import TaskExecution
 from iroko.crawler.task import CrawlerTask
-
+from iroko.crawler.task import http_task_headers
 from iroko.storage import neo4j_db
 
 logger = logging.getLogger('iroko-cris')
@@ -61,7 +61,7 @@ class OjsProcessingTask(CrawlerTask):
             result_pubs = await session.run(query_find_pubs)
             
             # Create a single HTTP client for all requests
-            async with httpx.AsyncClient(follow_redirects=True) as client:
+            async with httpx.AsyncClient(headers=http_task_headers,timeout=30.0, follow_redirects=True) as client:
                 async for record in result_pubs:
                     pub_node = record["p"]
                     pub_node_id = record["node_id"]

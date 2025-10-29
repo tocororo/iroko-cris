@@ -15,7 +15,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 from iroko.crawler.manager import crawler_manager
 from iroko.crawler.schemas import CrawlerTaskConfig
 from iroko.crawler.tasks.dummy_task import DummyTask
-from iroko.crawler.tasks.miar import ColectMiarIndexes, FixMiarIndexs, MiarCubaJournalsCrawler, MiarDataProcessingTask
+from iroko.crawler.tasks.miar import ColectMiarIndexes, FixMiarIndexs, MiarCubaJournalsCrawler, MiarJournalsProcessingTask
 
 
 # Setup logging to see the output
@@ -62,131 +62,106 @@ async def add_execute(task_config: CrawlerTaskConfig, task_type: str):
         await asyncio.sleep(1)
 
 
-async def collect_miar_journals():
-    """Test the dummy task"""
-    
-    # Manually register the task type first
-    crawler_manager.register_task_type("MiarCubaJournalsCrawler", MiarCubaJournalsCrawler)
-    
-    # Create task configuration
-    await add_execute( CrawlerTaskConfig(
-        task_id="collect_journals",
-        name="Collect cuban journals",
-        description="Collect cuban journals from miar",
-        config={
-            "output": ".data-init/miar-journals-2025.json",
-        },
-    ), "MiarCubaJournalsCrawler")
-
-
-async def process_miar_journals(): 
-    crawler_manager.register_task_type("MiarDataProcessingTask", MiarDataProcessingTask)
-    
-    await add_execute(CrawlerTaskConfig(
-        task_id="process_collected_journals",
-        name="Process collected cuban journals",
-        config={
-            "output_json_path": ".data-init/miar-journals-2025-process.json",
-            "input_json_path": ".data-init/miar-journals-2025.json",
-        },
-    ), "MiarDataProcessingTask")
-
-
-async def fix_miar_db(): 
-    crawler_manager.register_task_type("FixMiarIndexs", FixMiarIndexs)
-
-    await add_execute( CrawlerTaskConfig(
-        task_id="fix_miar_db",
-        name="Fix dbs",
-        config={
-            "data_file": ".data-init/miar-db-2019.json"
-        },
-    ), "FixMiarIndexs")
-    
-
-async def collect_miar_db(): 
-    crawler_manager.register_task_type("ColectMiarIndexes", ColectMiarIndexes)
-    
-    await add_execute(CrawlerTaskConfig(
-        task_id="collect_miar_db",
-        name="Collect dbs",
-        config={
-            "output": ".data-init/miar-db-2025-procesed.json",
-            "input": ".data-init/miar-db-2025.json",
-        },
-    ), "ColectMiarIndexes")
-    
-
-async def process_scielo(): 
-    crawler_manager.register_task_type("ScieloProcessingTask", ScieloProcessingTask)
-    
-    await add_execute(CrawlerTaskConfig(
-        task_id="process_scielo",
-        name="process scielo dbs",
-        config={
-            "output_json_path": ".data-init/scielo-2025-process.json",
-            "input": ".data-init/scielo-2025.json"
-        },
-    ), "ScieloProcessingTask")
-    
-
-async def ojs_tasks(): 
-    crawler_manager.register_task_type("OjsProcessingTask", OjsProcessingTask)
-    
-    await add_execute(CrawlerTaskConfig(
-        task_id="ojs_tasks",
-        name="Process urls and ojs tasks",
-        config={
-            "output_json_path": ".data-init/ojs-tasks-2025.json"
-        },
-    ), "OjsProcessingTask")
-    
-
-async def organizations_tasks(): 
-    crawler_manager.register_task_type("OrganizationsProcessingTask", OrganizationsProcessingTask)
-    
-    await add_execute(CrawlerTaskConfig(
-        task_id="organizations_tasks",
-        name="Process organizations tasks",
-        config={
-            "codepa": ".data-init/orgs-onei-codepa.xlsx", 
-            "diune": ".data-init/orgs-onei-duine-septiembre-2025-fix.xlsx", 
-            "ror": ".data-init/orgs-ror-cuban-records.json",
-            "output": ".data-init/orgs-tasks-2025.json"
-        },
-    ), "OrganizationsProcessingTask")
-    
-
-async def orcid_dump_tasks(): 
-    crawler_manager.register_task_type("OrcidDumpProcessingTask", OrcidDumpProcessingTask)
-    
-    await add_execute(CrawlerTaskConfig(
-        task_id="orcid_dump_task",
-        name="Orcid Dump processing tasks",
-        config={
-            'orcid_dump_path': '.data/orcid/orcid_de_cubanos',
-            'output_json': '.data/orcid/cuban_researchers/output.json',
-            'output_dir': '.data/orcid/cuban_researchers'
-        },
-    ), "OrcidDumpProcessingTask")
-    
-
-
-
 if __name__ == "__main__":
-    print("🚀 Starting MIAR Tasks")
-
-    # asyncio.run(fix_miar_db())
-    asyncio.run(collect_miar_db())
-
-    # asyncio.run(collect_miar_journals())
-    asyncio.run(process_miar_journals())
     
-    asyncio.run(process_scielo())
-    asyncio.run(ojs_tasks())
+    # crawler_manager.register_task_type("FixMiarIndexs", FixMiarIndexs)
+    # asyncio.run(
+    #     add_execute( CrawlerTaskConfig(
+    #         task_id="fix_miar_db",
+    #         name="Fix dbs",
+    #         config={
+    #             "data_file": ".data-init/miar-db-2019.json"
+    #         },
+    #     ), "FixMiarIndexs")
+    # )
 
-    asyncio.run(organizations_tasks())
+    # crawler_manager.register_task_type("ColectMiarIndexes", ColectMiarIndexes)
+    # asyncio.run(
+    #     add_execute(CrawlerTaskConfig(
+    #         task_id="collect_miar_db",
+    #         name="Collect dbs",
+    #         config={
+    #             "output": ".data-init/miar-db-2025-procesed.json",
+    #             "input": ".data-init/miar-db-2025.json",
+    #         },
+    #     ), "ColectMiarIndexes")
+    # )
+
+    # crawler_manager.register_task_type("MiarCubaJournalsCrawler", MiarCubaJournalsCrawler)
+    # asyncio.run(
+    #      add_execute( CrawlerTaskConfig(
+    #         task_id="collect_journals",
+    #         name="Collect cuban journals",
+    #         description="Collect cuban journals from miar",
+    #         config={
+    #             "output": ".data-init/miar-journals-2025.json",
+    #         },
+    #     ), "MiarCubaJournalsCrawler")
+    # )
+
+    # crawler_manager.register_task_type("MiarJournalsProcessingTask", MiarJournalsProcessingTask)
+    # asyncio.run(
+    #     add_execute(CrawlerTaskConfig(
+    #         task_id="process_collected_journals",
+    #         name="Process collected cuban journals",
+    #         config={
+    #             "output_json_path": ".data-init/miar-journals-2025-process.json",
+    #             "input_json_path": ".data-init/miar-journals-2025.json",
+    #         },
+    #     ), "MiarJournalsProcessingTask")
+    # )
+
+    crawler_manager.register_task_type("ScieloProcessingTask", ScieloProcessingTask)
+    asyncio.run(
+        add_execute(CrawlerTaskConfig(
+            task_id="process_scielo",
+            name="process scielo dbs",
+            config={
+                "output_json_path": ".data-init/scielo-2025-process.json",
+                "input": ".data-init/scielo-2025.json",
+            },
+        ), "ScieloProcessingTask")
+    )
+
+    # crawler_manager.register_task_type("OjsProcessingTask", OjsProcessingTask)
     
-    # asyncio.run(orcid_dump_tasks())
+    # asyncio.run(add_execute(CrawlerTaskConfig(
+    #         task_id="ojs_tasks",
+    #         name="Process urls and ojs tasks",
+    #         config={
+    #             "output_json_path": ".data-init/ojs-tasks-2025.json"
+    #         },
+    #     ), "OjsProcessingTask")
+    # )
+
+    # crawler_manager.register_task_type("OrganizationsProcessingTask", OrganizationsProcessingTask)
+    
+    # asyncio.run(
+    #     add_execute(CrawlerTaskConfig(
+    #         task_id="organizations_tasks",
+    #         name="Process organizations tasks",
+    #         config={
+    #             "codepa": ".data-init/orgs-onei-codepa.xlsx", 
+    #             "diune": ".data-init/orgs-onei-duine-septiembre-2025-fix.xlsx", 
+    #             "ror": ".data-init/orgs-ror-cuban-records.json",
+    #             "output": ".data-init/orgs-tasks-2025.json"
+    #         },
+    #     ), "OrganizationsProcessingTask")
+    # )
+
+    
+    # crawler_manager.register_task_type("OrcidDumpProcessingTask", OrcidDumpProcessingTask)
+    
+    # asyncio.run(
+    #     add_execute(CrawlerTaskConfig(
+    #         task_id="orcid_dump_task",
+    #         name="Orcid Dump processing tasks",
+    #         config={
+    #             'orcid_dump_path': '.data/orcid/orcid_de_cubanos',
+    #             'output_json': '.data/orcid/cuban_researchers/output.json',
+    #             'output_dir': '.data/orcid/cuban_researchers'
+    #         },
+    #     ), "OrcidDumpProcessingTask")
+    # )
     
     print("🎊 All tasks completed!")
