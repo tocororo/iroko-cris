@@ -4068,6 +4068,21 @@ files = [
 ]
 
 [[package]]
+name = "xmltodict"
+version = "1.0.2"
+description = "Makes working with XML feel like you are working with JSON"
+optional = false
+python-versions = ">=3.9"
+groups = ["main"]
+files = [
+    {file = "xmltodict-1.0.2-py3-none-any.whl", hash = "sha256:62d0fddb0dcbc9f642745d8bbf4d81fd17d6dfaec5a15b5c1876300aad92af0d"},
+    {file = "xmltodict-1.0.2.tar.gz", hash = "sha256:54306780b7c2175a3967cad1db92f218207e5bc1aba697d887807c0fb68b7649"},
+]
+
+[package.extras]
+test = ["pytest", "pytest-cov"]
+
+[[package]]
 name = "zxcvbn"
 version = "4.5.0"
 description = ""
@@ -4082,4 +4097,4 @@ files = [
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.12,<4.0"
-content-hash = "63ac5cfa26bef5c7edd24fd7030e7c4717438f6b40818acf9913822b40fb9430"
+content-hash = "b23c85b510be7d54e0a14815f94ae93843a24d9497edde43b06d66cc8f41380d"

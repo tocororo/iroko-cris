@@ -6,11 +6,11 @@
   "additionalProperties": true,
   "required": [
     "identifiers",
-    "id",
+    "iroko_uuid",
     "name"
   ],
   "properties": {
-    "id": {
+    "iroko_uuid": {
       "type": "string",
       "description": "Iroko UUID, pid_type = perid"
     },
@@ -35,13 +35,21 @@
       "type": "string",
       "description": "The name typically used to refer to the institute."
     },
-    "last_name": {
+    "given_name": {
       "type": "string",
       "description": "The name typically used to refer to the institute."
     },
+    "family_name": {
+      "type": "string",
+      "description": "The name typically used to refer to the institute."
+    },
+    "biography": {
+      "type": "string",
+      "description": "Biography"
+    },
     "public": {
       "type": "boolean",
-      "description": "Si el perfil del usuario es publico"
+      "description": "if is a public profile"
     },
     "gender": {
       "type": "string",
@@ -82,6 +90,13 @@
         "type": "string"
       }
     },
+    "distinctions": {
+      "type": "array",
+      "description": "Distinctions and Awards",
+      "items": {
+        "type": "string"
+      }
+    },
     "affiliations": {
       "description": "Affiliations of the person",
       "minItems": 0,
@@ -90,10 +105,6 @@
         "type": "object",
         "additionalProperties": false,
         "properties": {
-          "id": {
-            "type": "string",
-            "description": "Iroko Organization UUID"
-          },
           "identifiers": {
             "type": "array",
             "description": "Organization Identifiers",
@@ -121,16 +132,80 @@
             "type": "string",
             "format": "date-time"
           },
-          "label": {
+          "name": {
             "type": "string",
-            "description": "The name of the related institute"
+            "description": "The name of the related organization"
           },
           "roles": {
             "type": "array",
             "description": "Roles within the organization",
             "items": {
               "type": "string",
-              "description": "Role (use controlled vocabulary)"
+              "description": "Roles"
+            }
+          },
+          "affiliation_type": {
+            "description": "type of the affiliation",
+            "type": "string",
+            "enum": [
+              "employments",
+              "educations",
+              "distinctions",
+              "memberships",
+              "services",
+              "fundings",
+              "invited-positions",
+              "qualifications"
+            ]
+          }
+        }
+      }
+    },
+    "peer-review": {
+      "description": "peer-review of the person",
+      "minItems": 0,
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "identifiers": {
+            "type": "array",
+            "description": "Publication Identifiers",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "idtype": {
+                  "description": "identifier type",
+                  "type": "string"
+                },
+                "value": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "start_date": {
+            "description": "Start date ",
+            "type": "string",
+            "format": "date-time"
+          },
+          "end_date": {
+            "description": "End date . None means to this date.",
+            "type": "string",
+            "format": "date-time"
+          },
+          "name": {
+            "type": "string",
+            "description": "The name of the related publication"
+          },
+          "roles": {
+            "type": "array",
+            "description": "Roles within the peer review process ",
+            "items": {
+              "type": "string",
+              "description": "Roles"
             }
           }
         }

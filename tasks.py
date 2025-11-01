@@ -4,8 +4,9 @@ import logging
 import sys
 from pathlib import Path
 
+from iroko.crawler.tasks.identifiers import IdentifierFixTask
 from iroko.crawler.tasks.ojs import OjsProcessingTask
-from iroko.crawler.tasks.orcid import OrcidDumpProcessingTask
+from iroko.crawler.tasks.orcid import OrcidDumpProcessingTask, OrcidMappingTask
 from iroko.crawler.tasks.organizations import OrganizationsProcessingTask
 from iroko.crawler.tasks.scielo import ScieloProcessingTask
 
@@ -111,20 +112,19 @@ if __name__ == "__main__":
     #     ), "MiarJournalsProcessingTask")
     # )
 
-    crawler_manager.register_task_type("ScieloProcessingTask", ScieloProcessingTask)
-    asyncio.run(
-        add_execute(CrawlerTaskConfig(
-            task_id="process_scielo",
-            name="process scielo dbs",
-            config={
-                "output_json_path": ".data-init/scielo-2025-process.json",
-                "input": ".data-init/scielo-2025.json",
-            },
-        ), "ScieloProcessingTask")
-    )
+    # crawler_manager.register_task_type("ScieloProcessingTask", ScieloProcessingTask)
+    # asyncio.run(
+    #     add_execute(CrawlerTaskConfig(
+    #         task_id="process_scielo",
+    #         name="process scielo dbs",
+    #         config={
+    #             "output_json_path": ".data-init/scielo-2025-process.json",
+    #             "input": ".data-init/scielo-2025.json",
+    #         },
+    #     ), "ScieloProcessingTask")
+    # )
 
     # crawler_manager.register_task_type("OjsProcessingTask", OjsProcessingTask)
-    
     # asyncio.run(add_execute(CrawlerTaskConfig(
     #         task_id="ojs_tasks",
     #         name="Process urls and ojs tasks",
@@ -135,7 +135,6 @@ if __name__ == "__main__":
     # )
 
     # crawler_manager.register_task_type("OrganizationsProcessingTask", OrganizationsProcessingTask)
-    
     # asyncio.run(
     #     add_execute(CrawlerTaskConfig(
     #         task_id="organizations_tasks",
@@ -151,7 +150,6 @@ if __name__ == "__main__":
 
     
     # crawler_manager.register_task_type("OrcidDumpProcessingTask", OrcidDumpProcessingTask)
-    
     # asyncio.run(
     #     add_execute(CrawlerTaskConfig(
     #         task_id="orcid_dump_task",
@@ -163,5 +161,30 @@ if __name__ == "__main__":
     #         },
     #     ), "OrcidDumpProcessingTask")
     # )
+
     
+    # crawler_manager.register_task_type("OrcidMappingTask", OrcidMappingTask)
+    # asyncio.run(
+    #     add_execute(CrawlerTaskConfig(
+    #         task_id="orcid_mapping_task",
+    #         name="Orcid Mapping processing tasks",
+    #         config={
+    #             'input_folder': '.data-init/orcid_test',
+    #             'output_folder': '.data-init/orcid_test_out',
+    #             'diune_path':'.data-init/orgs-onei-duine-septiembre-2025-fix.xlsx',
+    #             'person_schema_path': 'docs/schema/person-v1.0.0-simple.json'
+    #         },
+    #     ), "OrcidMappingTask")
+    # )
+
+        
+    crawler_manager.register_task_type("IdentifierFixTask", IdentifierFixTask)
+    asyncio.run(
+        add_execute(CrawlerTaskConfig(
+            task_id="identifiers_task",
+            name="Identifiers tasks",
+            config={},
+        ), "IdentifierFixTask")
+    )
+
     print("🎊 All tasks completed!")

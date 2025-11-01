@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 import json
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Tuple
 import logging
 import os
 from pathlib import Path
@@ -10,16 +10,22 @@ import shutil
 import uuid
 import xml.etree.ElementTree as ET
 
-
+import unicodedata
 from iroko.crawler.schemas import TaskExecution
 from iroko.crawler.task import CrawlerTask
 from iroko.storage import neo4j_db
 
 logger = logging.getLogger('iroko-cris')
 
+import asyncio
+import json
+import re
+import pandas as pd
+from jsonschema import validate, ValidationError
+import xmltodict
 
 
-
+logger = logging.getLogger('iroko-cris')
 
 
 class OrcidDumpProcessingTask(CrawlerTask):
@@ -152,7 +158,7 @@ class OrcidDumpProcessingTask(CrawlerTask):
             # Parse XML using lxml 
             tree = etree.parse(str(xml_file))
             root = tree.getroot()
-            
+
             # Extract ORCID iD from the file 
             orcid_element = root.find(".//{http://www.orcid.org/ns/common}orcid-identifier")
             orcid_id = None
@@ -488,7 +494,736 @@ class OrcidDumpProcessingTask(CrawlerTask):
         return []
     
 
+# delete persons and persons relationships 
+# MATCH (p:Person)-[r]->() delete r
+# MATCH (p:Person) delete p
+# MATCH ()-[r]->(p:Author) delete r
+# MATCH (p:Author)-[r]->() delete r
+# MATCH (p:Author) delete p
+
 class OrcidMappingTask(CrawlerTask):
+    """Task to map ORCID XML records to the iroko Person JSON schema and ingest into Neo4j."""
+
+    def __init__(self, task_id: str, name: str, config: Dict[str, Any] = None):
+        super().__init__(task_id, name, config)
+        self.input_folder = None
+        self.output_folder = None
+        self.diune_path = None
+        self.diune_df = None
+        self.person_json_schema = None
+        self._created_orgs_json = [] # Temporary storage for created organizations
+
+    def validate_config(self) -> bool:
+        """Validates the required configuration keys."""
+        required_keys = ['input_folder', 'output_folder', 'diune_path', 'person_schema_path']
+        for key in required_keys:
+            if key not in self.config or not self.config[key]:
+                self.logger.error(f"Missing or empty required config key: {key}")
+                return False
+
+        if not os.path.isdir(self.config['input_folder']):
+            self.logger.error(f"Input folder does not exist: {self.config['input_folder']}")
+            return False
+
+        if not os.path.isdir(self.config['output_folder']):
+            self.logger.error(f"Output folder does not exist: {self.config['output_folder']}")
+            return False
+
+        if not os.path.isfile(self.config['diune_path']):
+            self.logger.error(f"DIUNE Excel file does not exist: {self.config['diune_path']}")
+            return False
+
+        if not os.path.isfile(self.config['person_schema_path']):
+            self.logger.error(f"Person JSON Schema file does not exist: {self.config['person_schema_path']}")
+            return False
+
+        try:
+            # Test reading the Excel file
+            test_df = pd.read_excel(self.config['diune_path'], dtype=str)
+            required_columns = ["codigo", "descripcion"]
+            if not all(col in test_df.columns for col in required_columns):
+                 self.logger.error(f"DIUNE Excel file missing required columns: {required_columns}")
+                 return False
+             
+             # Test loading the JSON schema
+            with open(self.config['person_schema_path'], 'r', encoding='utf-8') as f:
+                json.load(f) # Will raise an error if invalid JSON
+                 
+        except Exception as e:
+            self.logger.error(f"Error reading DIUNE Excel file or Person Schema: {e}")
+            return False
+
+        return True
+
+    async def execute(self, execution: TaskExecution) -> Dict[str, Any]:
+        """Executes the ORCID mapping and ingestion process."""
+        try:
+            self.input_folder = self.config['input_folder']
+            self.output_folder = self.config['output_folder']
+            self.diune_path = self.config['diune_path']
+            self.person_schema_path = self.config['person_schema_path']
+
+            self.logger.info("Loading Person JSON Schema...")
+            with open(self.person_schema_path, 'r', encoding='utf-8') as f:
+                 self.person_json_schema = json.load(f)
+
+            self.logger.info("Loading DIUNE data...")
+            self.diune_df = pd.read_excel(self.diune_path, dtype=str)
+            # Use unicodedata for normalization instead of unidecode
+            self.diune_df['descripcion_lower'] = self.diune_df['descripcion'].apply(
+                lambda x: unicodedata.normalize('NFKD', x.lower()).encode('ascii', 'ignore').decode('ascii') if pd.notna(x) else x
+            )
+
+            self.logger.info("Starting ORCID mapping step...")
+            await self._step1_mapping()
+
+            # self.logger.info("Starting Neo4j ingestion step...")
+            # await self._step2_ingest()
+
+            # self.logger.info("Saving created organizations JSON...")
+            # await self._save_created_orgs_json()
+
+            self.logger.info(f"OrcidMappingTask {self.task_id} completed successfully.")
+            return {"status": "success", "message": f"Processed ORCID records and ingested into Neo4j. Created {len(self._created_orgs_json)} organizations."}
+
+        except Exception as e:
+            self.logger.error(f"Error executing OrcidMappingTask {self.task_id}: {e}", exc_info=True)
+            return {"status": "error", "message": str(e)}
+
+    async def _step1_mapping(self):
+        """Maps ORCID XML files to JSON schema and saves them."""
+        xml_files = [f for f in os.listdir(self.input_folder) if f.endswith('.xml')]
+        total_files = len(xml_files)
+
+        for idx, filename in enumerate(xml_files):
+            self.logger.info(f"Processing file {idx + 1}/{total_files}: {filename}")
+            input_path = os.path.join(self.input_folder, filename)
+
+            try:
+                
+                # Parse the XML file
+                # tree = ET.parse(input_path)
+                # root = tree.getroot()
+                
+                tree = etree.parse(input_path)
+                root = tree.getroot()
+
+                # Define namespaces based on the XSDs provided
+                ns = {
+                    'record': 'http://www.orcid.org/ns/record',
+                    'person': 'http://www.orcid.org/ns/person',
+                    'activities': 'http://www.orcid.org/ns/activities',
+                    'common': 'http://www.orcid.org/ns/common',
+                    'employment': 'http://www.orcid.org/ns/employment',
+                    'education': 'http://www.orcid.org/ns/education',
+                    'distinction': 'http://www.orcid.org/ns/distinction',
+                    'membership': 'http://www.orcid.org/ns/membership',
+                    'service': 'http://www.orcid.org/ns/service',
+                    'invited-position': 'http://www.orcid.org/ns/invited-position',
+                    'qualification': 'http://www.orcid.org/ns/qualification',
+                    'peer-review': 'http://www.orcid.org/ns/peer-review',
+                    'work': 'http://www.orcid.org/ns/work',
+                    'funding': 'http://www.orcid.org/ns/funding',
+                    'research-resource': 'http://www.orcid.org/ns/research-resource',
+                    'personal-details': 'http://www.orcid.org/ns/personal-details',
+                    'other-name': 'http://www.orcid.org/ns/other-name',
+                    'email': 'http://www.orcid.org/ns/email',
+                    'address': 'http://www.orcid.org/ns/address',
+                    'keyword': 'http://www.orcid.org/ns/keyword',
+                    'external-identifier': 'http://www.orcid.org/ns/external-identifier',
+                    'researcher-url': 'http://www.orcid.org/ns/researcher-url'
+                }
+
+                # Extract ORCID from filename
+                orcid_value = os.path.splitext(filename)[0]
+
+                # Map the XML structure to the JSON schema
+                # mapped_person = self._map_orcid_xml_to_json(root, orcid_value, ns)
+                with open(input_path) as fd:
+                    mapped_person = xmltodict.parse(fd.read())
+                mapped_person['iroko_uuid'] = str(uuid.uuid4())
+
+                # Validate the mapped JSON against the schema
+                # validate(instance=mapped_person, schema=self.person_json_schema)
+
+                # Save the mapped JSON file
+                output_filename = f"{orcid_value}.json"
+                output_path = os.path.join(self.output_folder, output_filename)
+                with open(output_path, 'w', encoding='utf-8') as f:
+                    json.dump(mapped_person, f, ensure_ascii=False, indent=2)
+
+            except ValidationError as ve:
+                self.logger.error(f"Validation error for {filename}: {ve}")
+                # Optionally, continue processing other files or raise
+                # raise
+            except ET.ParseError as pe:
+                self.logger.error(f"XML parsing error for {filename}: {pe}")
+                # Optionally, continue processing other files or raise
+                # raise
+            except Exception as e:
+                self.logger.error(f"Unexpected error processing {filename}: {e}", exc_info=True)
+                # Optionally, continue processing other files or raise
+                # raise
+
+    def _map_orcid_xml_to_json(self, root: ET.Element, orcid_value: str, ns: Dict[str, str]) -> Dict[str, Any]:
+        """Maps an ORCID XML ElementTree root to the target JSON structure."""
+        # Initialize the output dictionary
+        person_data = {
+            "identifiers": [{"idtype": "orcid", "value": orcid_value}],
+            "name": "", # Will try to populate from personal details
+            "given_name": "",
+            "family_name": "",
+            "biography": "",
+            "public": True, # Assuming public unless specified otherwise in XML
+            "gender": "",
+            "country": {"code": "", "name": ""},
+            "email_addresses": [],
+            "aliases": [],
+            "academic_titles": [],
+            "distinctions": [], # Note: typo in original schema, keeping as 'distintions'
+            "affiliations": [],
+            "peer_review": [] # Note: property in schema is "peer-review", key in dict is "peer_review"
+        }
+
+        # --- Map Personal Details (from person.xsd) ---
+        person_details = root.find(f'.//person:person', ns)
+        if person_details is not None:
+            # Name (from personal-details.xsd via person.xsd)
+            name_details = person_details.find('.//person:name', ns)
+            if name_details is not None:
+                given_names = name_details.find('.//personal-details:given-names', ns)
+                family_names = name_details.find('.//personal-details:family-name', ns)
+                if given_names is not None:
+                    person_data['given_name'] = given_names.text or ""
+                if family_names is not None:
+                    person_data['family_name'] = family_names.text or ""
+                person_data['name'] = f"{person_data['given_name']} {person_data['family_name']}".strip()
+
+            # Biography (from personal-details.xsd via person.xsd)
+            biography_elem = person_details.find('.//person:biography/personal-details:content', ns)
+            if biography_elem is not None and biography_elem.text:
+                 person_data['biography'] = biography_elem.text
+
+            # Gender (not explicitly in the provided XSDs for personal-details, might be elsewhere or not standard)
+            # Assuming it's not directly available in the simplified structure shown
+
+            # Country (from address.xsd via person.xsd)
+            country_elem = person_details.find('.//address:address/address:country', ns)
+            if country_elem is not None and country_elem.text:
+                person_data['country']['code'] = country_elem.text
+                # Name would require a lookup, leaving blank for now
+
+            # Emails (from email.xsd via person.xsd)
+            email_list = person_details.find('.//email:emails', ns)
+            if email_list is not None:
+                for email_elem in email_list.findall('.//email:email', ns):
+                    email_val = email_elem.find('.//email:email', ns)
+                    if email_val is not None and email_val.text:
+                        person_data['email_addresses'].append(email_val.text)
+
+            # Other names (aliases) (from other-name.xsd via person.xsd)
+            other_names_list = person_details.find('.//other-name:other-names', ns)
+            if other_names_list is not None:
+                for other_name_elem in other_names_list.findall('.//other-name:other-name', ns):
+                    # other-name can be a simple element containing the name
+                    if other_name_elem.text:
+                        person_data['aliases'].append(other_name_elem.text)
+
+
+        # --- Map Affiliations (from activities.xsd and common.xsd) ---
+        # Affiliations include Employment, Education, Distinction, Membership, Service, Invited Position, Qualification
+        activities_summary = root.find('.//activities:activities-summary', ns)
+        if activities_summary is not None:
+            affiliations = []
+            # Iterate through potential affiliation containers
+            for container_tag in ['employments', 'educations', 'distinctions', 'memberships', 'services', 'invited-positions', 'qualifications']:
+                container = activities_summary.find(f'.//activities:{container_tag}', ns)
+                if container is not None:
+                    # Each container has 'affiliation-group's which contain summaries
+                    for group in container.findall('.//activities:affiliation-group', ns):
+                        # Each group can have different types of summaries, find the correct one
+                        summary_types = [
+                            'employment:employment-summary',
+                            'education:education-summary',
+                            'distinction:distinction-summary',
+                            'membership:membership-summary',
+                            'service:service-summary',
+                            'invited-position:invited-position-summary',
+                            'qualification:qualification-summary'
+                        ]
+                        for summary_type in summary_types:
+                            summary_elem = group.find(f'.//{summary_type}', ns)
+                            if summary_elem is not None:
+                                # Determine affiliation type based on the summary tag found
+                                affiliation_type = container_tag #[:-1] # Remove 's' to get type (e.g., employments -> employment)
+                                # if affiliation_type == 'invited-position':
+                                #     affiliation_type = 'employment' # Map to a standard type
+                                # elif affiliation_type == 'qualification':
+                                #     affiliation_type = 'education' # Map to a standard type
+                                # elif affiliation_type == 'distinction':
+                                #     # Distinctions might be mapped differently, for now treat as employment or add to distinctions list
+                                #     pass # Let it use the affiliation structure below
+
+                                affiliation = {
+                                    "identifiers": [], # Populate from common:external-ids if present in summary
+                                    "start_date": "",
+                                    "end_date": "",
+                                    "name": "",
+                                    "roles": [],
+                                    "affiliation_type": affiliation_type
+                                }
+
+                                # Extract organization name from summary
+                                org_elem = summary_elem.find('.//common:organization/common:name', ns)
+                                if org_elem is not None and org_elem.text:
+                                    affiliation["name"] = org_elem.text.strip()
+
+                                # Extract role title from summary
+                                role_title_elem = summary_elem.find('.//common:role-title', ns)
+                                if role_title_elem is not None and role_title_elem.text:
+                                    affiliation["roles"].append(role_title_elem.text.strip())
+
+                                # Extract department name from summary
+                                dept_name_elem = summary_elem.find('.//common:department-name', ns)
+                                if dept_name_elem is not None and dept_name_elem.text:
+                                    affiliation["roles"].append(dept_name_elem.text.strip()) # Add department as a role or separate field if needed
+
+                                # Extract dates
+                                start_date_elem = summary_elem.find('.//common:start-date', ns)
+                                if start_date_elem is not None:
+                                    year = start_date_elem.find('.//common:year', ns)
+                                    month = start_date_elem.find('.//common:month', ns)
+                                    day = start_date_elem.find('.//common:day', ns)
+                                    if year is not None:
+                                        date_str = year.text or ""
+                                        if month is not None:
+                                            date_str += f"-{month.text.zfill(2) or '00'}"
+                                            if day is not None:
+                                                date_str += f"-{day.text.zfill(2) or '00'}"
+                                        affiliation["start_date"] = date_str
+
+                                end_date_elem = summary_elem.find('.//common:end-date', ns)
+                                if end_date_elem is not None:
+                                    year = end_date_elem.find('.//common:year', ns)
+                                    month = end_date_elem.find('.//common:month', ns)
+                                    day = end_date_elem.find('.//common:day', ns)
+                                    if year is not None:
+                                        date_str = year.text or ""
+                                        if month is not None:
+                                            date_str += f"-{month.text.zfill(2) or '00'}"
+                                            if day is not None:
+                                                date_str += f"-{day.text.zfill(2) or '00'}"
+                                        affiliation["end_date"] = date_str
+
+                                # Extract external IDs (identifiers) from the summary
+                                external_ids_elem = summary_elem.find('.//common:external-ids', ns)
+                                if external_ids_elem is not None:
+                                    for ext_id_elem in external_ids_elem.findall('.//common:external-id', ns):
+                                        id_type_elem = ext_id_elem.find('.//common:external-id-type', ns)
+                                        id_value_elem = ext_id_elem.find('.//common:external-id-value', ns)
+                                        if id_type_elem is not None and id_type_elem.text and id_value_elem is not None and id_value_elem.text:
+                                            affiliation["identifiers"].append({
+                                                "idtype": id_type_elem.text,
+                                                "value": id_value_elem.text
+                                            })
+
+                                affiliations.append(affiliation)
+
+            person_data['affiliations'] = affiliations
+
+        # --- Map Peer Review (from activities.xsd and peer-review.xsd) ---
+        peer_reviews_container = activities_summary.find('.//activities:peer-reviews', ns)
+        if peer_reviews_container is not None:
+            peer_reviews = []
+            for group in peer_reviews_container.findall('.//activities:peer-review-group', ns):
+                 # Groups might contain duplicates, iterate through them
+                 for duplicate_group in group.findall('.//activities:peer-review-duplicates', ns):
+                     for summary_elem in duplicate_group.findall('.//peer-review:peer-review-summary', ns):
+                         review = {
+                             "identifiers": [],
+                             "start_date": "",
+                             "end_date": "",
+                             "name": "", # e.g., journal name, grant number
+                             "roles": [] # e.g., reviewer, editor
+                         }
+                         # Extract name (e.g., from source name or other relevant field)
+                         # Example: journal-title might be under peer-review:journal-title
+                         journal_title_elem = summary_elem.find('.//peer-review:journal-title', ns)
+                         if journal_title_elem is not None and journal_title_elem.text:
+                             review["name"] = journal_title_elem.text.strip()
+
+                         # Extract external IDs
+                         external_ids_elem = summary_elem.find('.//common:external-ids', ns)
+                         if external_ids_elem is not None:
+                             for ext_id_elem in external_ids_elem.findall('.//common:external-id', ns):
+                                 id_type_elem = ext_id_elem.find('.//common:external-id-type', ns)
+                                 id_value_elem = ext_id_elem.find('.//common:external-id-value', ns)
+                                 if id_type_elem is not None and id_type_elem.text and id_value_elem is not None and id_value_elem.text:
+                                     review["identifiers"].append({
+                                         "idtype": id_type_elem.text,
+                                         "value": id_value_elem.text
+                                     })
+
+                         # Extract roles (contributor attributes might define roles)
+                         # This is often implicit (e.g., reviewer) or defined by the context of the summary type
+                         review["roles"] = ["reviewer"] # Default role, can be more specific if available in XML
+
+                         peer_reviews.append(review)
+            person_data['peer_review'] = peer_reviews # Using the key 'peer_review' in the dict to match Python convention
+
+        return person_data
+
+
+    async def _step2_ingest(self):
+        """Ingests the mapped JSON files into Neo4j."""
+        from iroko.storage import neo4j_db
+        session = await neo4j_db.get_session()
+        json_files = [f for f in os.listdir(self.output_folder) if f.endswith('.json')]
+        total_files = len(json_files)
+
+        try:
+            for idx, filename in enumerate(json_files):
+                self.logger.info(f"Ingesting file {idx + 1}/{total_files}: {filename}")
+                input_path = os.path.join(self.output_folder, filename)
+
+                with open(input_path, 'r', encoding='utf-8') as f:
+                    person_data = json.load(f)
+
+                # Upsert Person node
+                person_identifiers = person_data.get('identifiers', [])
+                orcid_id = next((id_obj['value'] for id_obj in person_identifiers if id_obj.get('idtype') == 'orcid'), None)
+
+                if not orcid_id:
+                     self.logger.warning(f"No ORCID found in {filename}, skipping ingestion.")
+                     continue
+
+                # Prepare properties, excluding affiliations and peer_review
+                person_properties = {k: v for k, v in person_data.items() if k not in ['affiliations', 'peer_review']}
+                # Ensure 'name' exists for the Person node, fallback if needed
+                person_properties['name'] = person_properties.get('name', f"Person_{orcid_id}")
+
+                # Build the identifier property map for the Person
+                identifier_props = {}
+                for id_obj in person_identifiers:
+                    idtype = id_obj.get('idtype')
+                    value = id_obj.get('value')
+                    if idtype and value:
+                        identifier_props[f"identifier#{idtype}"] = value
+
+                # Cypher query to merge Person node
+                merge_person_query = """
+                MERGE (p:Person {identifier#orcid: $orcid_value})
+                SET p += $properties
+                """
+                await session.execute_write(
+                    lambda tx: tx.run(merge_person_query, orcid_value=orcid_id, properties=person_properties)
+                )
+
+                # Process Affiliations
+                affiliations = person_data.get('affiliations', [])
+                for affiliation in affiliations:
+                    await self._create_or_link_affiliation(session, orcid_id, affiliation)
+
+                # Process Peer Reviews
+                peer_reviews = person_data.get('peer_review', []) # Using the key from the dict
+                for review in peer_reviews:
+                    await self._create_or_link_peer_review(session, orcid_id, review)
+
+        finally:
+            await session.close()
+
+    async def _create_or_link_affiliation(self, session, person_orcid: str, affiliation_data: Dict[str, Any]):
+        """Creates or links an Organization node based on affiliation data and creates the relationship."""
+        org_name = affiliation_data.get('name', '').strip()
+        if not org_name:
+            self.logger.debug("Affiliation has no name, skipping.")
+            return
+
+        # Attempt to find Organization in DB first
+        org_node = await self._find_organization_in_db(session, affiliation_data)
+
+        # If not found in DB, search DIUNE
+        if not org_node:
+             org_node = await self._find_organization_in_diune(org_name)
+
+        # If found in DIUNE, create/update in DB
+        if org_node and org_node.get('from_diune'):
+             await self._create_organization_in_db_from_diune(session, org_node)
+             # Append to the list for later saving to JSON
+             self._created_orgs_json.append(org_node)
+        elif org_node and org_node.get('from_db'):
+             # Org already exists in DB, use its iroko_uuid
+             pass # org_node already contains the required info
+        elif not org_node:
+             # Create a new generic Organization
+             org_node = await self._create_generic_organization(session, affiliation_data)
+             # Append to the list for later saving to JSON
+             self._created_orgs_json.append(org_node)
+
+
+        # Now, org_node should contain the iroko_uuid of the target Organization
+        if org_node and 'iroko_uuid' in org_node:
+            # Create the relationship
+            rel_type = affiliation_data.get('affiliation_type', 'employment').upper() + "_IN"
+            roles = affiliation_data.get('roles', [])
+            start_date = affiliation_data.get('start_date')
+            end_date = affiliation_data.get('end_date')
+
+            # Cypher to merge the relationship
+            merge_rel_query = """
+            MATCH (p:Person {identifier#orcid: $person_orcid})
+            MATCH (o:Organization {iroko_uuid: $org_uuid})
+            MERGE (p)-[r:`{rel_type}`]->(o)
+            SET r.roles = $roles, r.start_date = $start_date, r.end_date = $end_date
+            """.format(rel_type=rel_type) # Format the relationship type into the query string
+
+            await session.execute_write(
+                lambda tx: tx.run(
+                    merge_rel_query,
+                    person_orcid=person_orcid,
+                    org_uuid=org_node['iroko_uuid'],
+                    roles=roles,
+                    start_date=start_date,
+                    end_date=end_date
+                )
+            )
+        else:
+            self.logger.warning(f"Could not establish affiliation for ORCID {person_orcid} and org '{org_name}', no org node found or created.")
+
+
+    async def _find_organization_in_db(self, session, affiliation_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """Searches for an Organization node in Neo4j using identifiers or name."""
+        # Search by identifiers first
+        identifiers = affiliation_data.get('identifiers', [])
+        for id_obj in identifiers:
+            idtype = id_obj.get('idtype')
+            value = id_obj.get('value')
+            if idtype and value:
+                query = f"MATCH (o:Organization) WHERE o.identifier#{idtype} = $value RETURN o.iroko_uuid AS uuid LIMIT 1"
+                result = await session.execute_read(lambda tx: tx.run(query, value=value).single())
+                if result:
+                    return {"iroko_uuid": result['uuid'], "from_db": True}
+
+        # Search by name if identifiers fail
+        name = affiliation_data.get('name')
+        if name:
+            # Use lower() and unicodedata for comparison
+            normalized_name = unicodedata.normalize('NFKD', name.lower()).encode('ascii', 'ignore').decode('ascii')
+            query = "MATCH (o:Organization) WHERE toLower(o.name) = $name OR toLower(o.alternative_name) = $name RETURN o.iroko_uuid AS uuid LIMIT 1"
+            result = await session.execute_read(lambda tx: tx.run(query, name=normalized_name).single())
+            if result:
+                return {"iroko_uuid": result['uuid'], "from_db": True}
+
+        return None
+
+    async def _find_organization_in_diune(self, org_name: str) -> Optional[Dict[str, Any]]:
+        """Searches for an organization name in the DIUNE dataframe."""
+        if self.diune_df is None or org_name.strip() == "":
+             return None
+
+        # Use lower() and unicodedata for comparison (already done during df loading)
+        normalized_name = unicodedata.normalize('NFKD', org_name.lower()).encode('ascii', 'ignore').decode('ascii')
+        matching_row = self.diune_df[self.diune_df['descripcion_lower'] == normalized_name]
+
+        if not matching_row.empty:
+            row = matching_row.iloc[0] # Assuming first match is sufficient
+            return {
+                "identifier#onei": f"onei.diune.{row['codigo']}",
+                "name": row['descripcion'],
+                "descripcion": row['descripcion'],
+                "descripcion_nae": row.get('descripcion_nae', ''),
+                "descripcion_cnae": row.get('descripcion_cnae', ''),
+                "forma_organizativa": row.get('desfo', ''),
+                "from_diune": True
+            }
+
+        return None
+
+    async def _create_organization_in_db_from_diune(self, session, org_data: Dict[str, Any]):
+        """Creates an Organization node in Neo4j using data from DIUNE."""
+        # Cypher query to create the Organization node with DIUNE data
+        create_query = """
+        MERGE (o:Organization {identifier#onei: $onei_id})
+        ON CREATE SET
+            o.iroko_uuid = toString(randomUUID()),
+            o.name = $name,
+            o.descripcion = $descripcion,
+            o.descripcion_nae = $descripcion_nae,
+            o.descripcion_cnae = $descripcion_cnae,
+            o.forma_organizativa = $forma_organizativa
+        ON MATCH SET
+            o.name = CASE WHEN o.name IS NULL THEN $name ELSE o.name END,
+            o.descripcion = CASE WHEN o.descripcion IS NULL THEN $descripcion ELSE o.descripcion END,
+            o.descripcion_nae = CASE WHEN o.descripcion_nae IS NULL THEN $descripcion_nae ELSE o.descripcion_nae END,
+            o.descripcion_cnae = CASE WHEN o.descripcion_cnae IS NULL THEN $descripcion_cnae ELSE o.descripcion_cnae END,
+            o.forma_organizativa = CASE WHEN o.forma_organizativa IS NULL THEN $forma_organizativa ELSE o.forma_organizativa END
+        RETURN o.iroko_uuid AS uuid
+        """
+        result = await session.execute_write(
+            lambda tx: tx.run(
+                create_query,
+                onei_id=org_data["identifier#onei"],
+                name=org_data["name"],
+                descripcion=org_data["descripcion"],
+                descripcion_nae=org_data["descripcion_nae"],
+                descripcion_cnae=org_data["descripcion_cnae"],
+                forma_organizativa=org_data["forma_organizativa"]
+            ).single()
+        )
+        # Update the passed org_data dict with the generated UUID from the DB
+        if result:
+            org_data['iroko_uuid'] = result['uuid']
+
+
+    async def _create_generic_organization(self, session, affiliation_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Creates a generic Organization node in Neo4j."""
+        org_name = affiliation_data.get('name', 'Unknown Organization')
+        identifiers = affiliation_data.get('identifiers', [])
+
+        # Prepare properties and identifier map
+        org_properties = {"name": org_name}
+        identifier_props = {}
+        for id_obj in identifiers:
+            idtype = id_obj.get('idtype')
+            value = id_obj.get('value')
+            if idtype and value:
+                identifier_props[f"identifier#{idtype}"] = value
+
+        # Cypher query to create the Organization node with identifiers and other properties
+        # Use a primary identifier for the MERGE key, fallback to name if none exist
+        primary_id_key = next((f"identifier#{id_obj['idtype']}" for id_obj in identifiers if id_obj.get('idtype')), None)
+        if primary_id_key:
+             primary_id_value = identifier_props[primary_id_key]
+             merge_condition = f"{{ {primary_id_key}: $primary_id_value }}"
+        else:
+             primary_id_value = org_name
+             merge_condition = "{ name: $primary_id_value }"
+
+        create_query = f"""
+        MERGE (o:Organization {merge_condition})
+        ON CREATE SET
+            o.iroko_uuid = toString(randomUUID()),
+            o += $properties
+        ON MATCH SET
+            o += $properties
+        RETURN o.iroko_uuid AS uuid
+        """
+
+        result = await session.execute_write(
+            lambda tx: tx.run(
+                create_query,
+                primary_id_value=primary_id_value,
+                properties=org_properties
+            ).single()
+        )
+        uuid = result['uuid'] if result else None
+        return {"iroko_uuid": uuid, "name": org_name, "from_generic": True} | identifier_props # Merge dicts
+
+
+    async def _create_or_link_peer_review(self, session, person_orcid: str, review_data: Dict[str, Any]):
+        """Creates or links a Publication node based on peer review data and creates the REVIEWER_IN relationship."""
+        pub_name = review_data.get('name', '').strip()
+        pub_identifiers = review_data.get('identifiers', [])
+
+        # Attempt to find Publication in DB first
+        pub_node_uuid = None
+        for id_obj in pub_identifiers:
+            idtype = id_obj.get('idtype')
+            value = id_obj.get('value')
+            if idtype and value:
+                query = f"MATCH (p:Publication) WHERE p.identifier#{idtype} = $value RETURN p.iroko_uuid AS uuid LIMIT 1"
+                result = await session.execute_read(lambda tx: tx.run(query, value=value).single())
+                if result:
+                    pub_node_uuid = result['uuid']
+                    break
+
+        # If not found by identifier, try by name
+        if not pub_node_uuid and pub_name:
+            query = "MATCH (p:Publication) WHERE p.name = $name RETURN p.iroko_uuid AS uuid LIMIT 1"
+            result = await session.execute_read(lambda tx: tx.run(query, name=pub_name).single())
+            if result:
+                pub_node_uuid = result['uuid']
+
+        # If still not found, create a new Publication node
+        if not pub_node_uuid:
+            # Prepare properties and identifier map for the new Publication
+            pub_properties = {"name": pub_name} # Add other properties from review_data if applicable
+            identifier_props = {}
+            for id_obj in pub_identifiers:
+                idtype = id_obj.get('idtype')
+                value = id_obj.get('value')
+                if idtype and value:
+                    identifier_props[f"identifier#{idtype}"] = value
+
+            # Cypher to create Publication node
+            # Use a primary identifier or name for the MERGE key
+            primary_id_key = next((f"identifier#{id_obj['idtype']}" for id_obj in pub_identifiers if id_obj.get('idtype')), None)
+            if primary_id_key:
+                 primary_id_value = identifier_props[primary_id_key]
+                 merge_condition = f"{{ {primary_id_key}: $primary_id_value }}"
+            else:
+                 primary_id_value = pub_name
+                 merge_condition = "{ name: $primary_id_value }"
+
+            create_pub_query = f"""
+            MERGE (pub:Publication {merge_condition})
+            ON CREATE SET
+                pub.iroko_uuid = toString(randomUUID()),
+                pub += $properties
+            ON MATCH SET
+                pub += $properties
+            RETURN pub.iroko_uuid AS uuid
+            """
+
+            result = await session.execute_write(
+                lambda tx: tx.run(create_pub_query, primary_id_value=primary_id_value, properties=pub_properties).single()
+            )
+            pub_node_uuid = result['uuid'] if result else None
+
+
+        # Create the REVIEWER_IN relationship
+        if pub_node_uuid:
+            roles = review_data.get('roles', [])
+            start_date = review_data.get('start_date')
+            end_date = review_data.get('end_date')
+            # affiliation_type seems misplaced in peer review schema, ignore for relationship props
+
+            # Cypher to merge the relationship
+            merge_rel_query = """
+            MATCH (p:Person {identifier#orcid: $person_orcid})
+            MATCH (pub:Publication {iroko_uuid: $pub_uuid})
+            MERGE (p)-[r:REVIEWER_IN]->(pub)
+            SET r.roles = $roles, r.start_date = $start_date, r.end_date = $end_date
+            """
+
+            await session.execute_write(
+                lambda tx: tx.run(
+                    merge_rel_query,
+                    person_orcid=person_orcid,
+                    pub_uuid=pub_node_uuid,
+                    roles=roles,
+                    start_date=start_date,
+                    end_date=end_date
+                )
+            )
+        else:
+            self.logger.warning(f"Could not establish peer review link for ORCID {person_orcid} and pub '{pub_name}', no pub node found or created.")
+
+
+    async def _save_created_orgs_json(self):
+        """Saves the list of organizations created during the process to a JSON file."""
+        if self._created_orgs_json:
+            output_path = os.path.join(self.output_folder, "created_organizations.json")
+            with open(output_path, 'w', encoding='utf-8') as f:
+                json.dump(self._created_orgs_json, f, ensure_ascii=False, indent=2)
+            self.logger.info(f"Saved {len(self._created_orgs_json)} created organizations to {output_path}.")
+        else:
+            self.logger.info("No organizations were created during the process.")
+
+
+
+
+class OrcidMappingTaskDepr(CrawlerTask):
     """
     A crawler task to map ORCID XML records to Iroko Person JSON schema.
     Processes Cuban researcher XML files and transforms them to standardized JSON format.
@@ -506,7 +1241,8 @@ class OrcidMappingTask(CrawlerTask):
         'email': 'http://www.orcid.org/ns/email',
         'record': 'http://www.orcid.org/ns/record',
         'researcher-url': 'http://www.orcid.org/ns/researcher-url',
-        'keyword': 'http://www.orcid.org/ns/keyword'
+        'keyword': 'http://www.orcid.org/ns/keyword',
+        'other-name': 'http://www.orcid.org/ns/other-name'
     }
     
     def __init__(self, task_id: str, name: str, config: Dict[str, Any] = None):
@@ -617,18 +1353,18 @@ class OrcidMappingTask(CrawlerTask):
             root = tree.getroot()
             
             # Map ORCID record to JSON schema
-            person_data = await self._map_orcid_to_schema(root, xml_file)
+            orcid, person_data = await self._map_orcid_to_schema(root, xml_file)
             
-            if person_data:
+            if orcid != '' and person_data:
                 # Save as JSON file
-                output_filename = f"{person_data['id']}.json"
+                output_filename = f"{orcid}.json"
                 output_path = Path(self.output_dir) / output_filename
                 
                 with open(output_path, 'w', encoding='utf-8') as f:
                     json.dump(person_data, f, indent=2, ensure_ascii=False)
                 
                 # Store mapping in Neo4j
-                await self._store_mapping_in_neo4j(session, person_data, str(xml_file))
+                # await self._store_mapping_in_neo4j(session, person_data, str(xml_file))
                 
                 self.logger.debug(f"Successfully mapped ORCID record to: {output_path}")
                 return True
@@ -645,11 +1381,13 @@ class OrcidMappingTask(CrawlerTask):
         Map ORCID XML data to the Iroko Person JSON schema.
         """
         try:
+            orcid, identifiers = self._extract_identifiers(root)
             person_data = {
-                "id": str(uuid.uuid4()),  # Generate Iroko UUID
-                "identifiers": self._extract_identifiers(root),
+                "iroko_id": str(uuid.uuid4()),  # Generate Iroko UUID
+                "identifiers": identifiers,
                 "name": self._extract_full_name(root),
-                "last_name": self._extract_family_name(root),
+                "given_name": self._extract_given_name(root),
+                "family_name": self._extract_family_name(root),
                 "public": self._extract_visibility_status(root),
                 "gender": self._extract_gender(root),
                 "country": self._extract_country(root),
@@ -660,11 +1398,11 @@ class OrcidMappingTask(CrawlerTask):
             }
             
             # Validate required fields are present
-            if not all([person_data["id"], person_data["identifiers"], person_data["name"]]):
+            if not all([person_data["iroko_id"], person_data["identifiers"], person_data["name"]]):
                 self.logger.warning(f"Missing required fields in ORCID record from {xml_file}")
                 return None
                 
-            return person_data
+            return orcid, person_data
             
         except Exception as e:
             self.logger.error(f"Error mapping ORCID to schema for {xml_file}: {str(e)}")
@@ -675,7 +1413,7 @@ class OrcidMappingTask(CrawlerTask):
         Extract person identifiers from ORCID record[citation:1][citation:7].
         """
         identifiers = []
-        
+        orcid = ''
         # ORCID iD itself[citation:1]
         orcid_element = root.find('.//common:orcid-identifier', self.NAMESPACES)
         if orcid_element is not None:
@@ -685,6 +1423,7 @@ class OrcidMappingTask(CrawlerTask):
                     "idtype": "orcid",
                     "value": path_element.text
                 })
+                orcid = path_element.text
         
         # External identifiers from researcher URLs[citation:7]
         researcher_urls = root.findall('.//researcher-url:researcher-urls/researcher-url:researcher-url', self.NAMESPACES)
@@ -714,7 +1453,7 @@ class OrcidMappingTask(CrawlerTask):
                     "value": id_value_elem.text
                 })
         
-        return identifiers
+        return orcid, identifiers
     
     def _map_identifier_type(self, url_name: str) -> Optional[str]:
         """
@@ -750,7 +1489,14 @@ class OrcidMappingTask(CrawlerTask):
         
         full_name = f"{given_names} {family_name}".strip()
         return full_name if full_name else "Unknown"
-    
+
+    def _extract_given_name(self, root) -> str:
+        """
+        Extract family name from ORCID record.
+        """
+        given_names_elem = root.find('.//personal-details:given-names', self.NAMESPACES)
+        return given_names_elem.text if given_names_elem is not None else ""
+
     def _extract_family_name(self, root) -> str:
         """
         Extract family name from ORCID record.
@@ -830,12 +1576,16 @@ class OrcidMappingTask(CrawlerTask):
         Extract other names/aliases from ORCID record.
         """
         aliases = []
-        other_names = root.findall('.//other-name:other-names/other-name:other-name', self.NAMESPACES)
+        # try:
+
+        other_names = root.findall('.//other-name:other-names', self.NAMESPACES)
         
-        for name_elem in other_names:
-            if name_elem.text:
-                aliases.append(name_elem.text)
-        
+        if other_names:
+            for name_elem in other_names:
+                if name_elem.text:
+                    aliases.append(name_elem.text)
+        # except:
+        #     return aliases
         return aliases
     
     def _extract_academic_titles(self, root) -> List[str]:
@@ -915,7 +1665,8 @@ class OrcidMappingTask(CrawlerTask):
             role = role_elem.text if role_elem is not None else affiliation_type.title()
             
             return {
-                "id": str(uuid.uuid4()),  # Generate organization relationship UUID
+                "iroko_id": str(uuid.uuid4()),  # Generate organization relationship UUID
+                "affiliation_type": affiliation_type,
                 "identifiers": identifiers,
                 "start_date": start_date,
                 "end_date": end_date,
@@ -979,7 +1730,7 @@ class OrcidMappingTask(CrawlerTask):
                 break
         
         parameters = {
-            "iroko_id": person_data["id"],
+            "iroko_id": person_data["iroko_id"],
             "orcid_id": orcid_id,
             "name": person_data["name"],
             "last_name": person_data.get("last_name", ""),
@@ -1000,4 +1751,4 @@ class OrcidMappingTask(CrawlerTask):
         """
         This task depends on the OrcidProcessingTask.
         """
-        return self.config.get('dependencies', ['orcid-processing-task'])
+        return [] 
