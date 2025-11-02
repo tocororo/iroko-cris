@@ -11,9 +11,14 @@ import io
 import logging
 
 import ast 
+
+from iroko.cypher.routers.edit import router as edit_router
+
 logger = logging.getLogger('iroko-cris')
 
 router = APIRouter(prefix="/cypher", tags=["cypher"])
+
+router.include_router(edit_router)
 
 # Constants
 MAX_EXPORT_ROWS = 100000

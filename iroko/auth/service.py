@@ -235,6 +235,11 @@ class RoleService:
                 "permissions": ["*"]  # Wildcard for all permissions
             },
             {
+                "name": "editor",
+                "description": "Content Editor",
+                "permissions": ["read", "write", "export"]
+            },
+            {
                 "name": "editor", 
                 "description": "Content Editor",
                 "permissions": ["read", "write", "export"]
