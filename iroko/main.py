@@ -5,8 +5,8 @@ from iroko.cypher.routers import cypher
 from iroko.auth.router import router as auth_router
 from iroko.auth.init import initialize_auth_system
 from iroko.evals.router import router as evals_router
-from iroko.crawler.router import router as crawler_router
-from iroko.crawler.manager import crawler_manager
+from iroko.tasks.router import router as crawler_router
+from iroko.tasks.manager import crawler_manager
 from iroko.evals.service import eval_service
 from iroko.config import app_settings
 from fastapi.middleware.cors import CORSMiddleware

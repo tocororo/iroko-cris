@@ -2,10 +2,10 @@ import logging
 from typing import Dict, Any
 import asyncio
 
-from iroko.crawler.task import CrawlerTask
-from iroko.crawler.schemas import TaskExecution
+from iroko.tasks.task import CrawlerTask
+from iroko.tasks.schemas import TaskExecution
 
-logger = logging.getLogger('iroko-cris.crawler')
+logger = logging.getLogger('iroko-cris.tasks')
 
 class DummyTask(CrawlerTask):
     """A simple dummy task that demonstrates basic task functionality"""

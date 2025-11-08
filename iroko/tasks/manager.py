@@ -10,7 +10,7 @@ from datetime import datetime
 from .schemas import CrawlerTaskConfig, TaskExecution, TaskStatus, CrawlerStats
 from .task import CrawlerTask
 
-logger = logging.getLogger('iroko-cris.crawler')
+logger = logging.getLogger('iroko-cris.tasks')
 
 class CrawlerManager:
     """Manager for crawler tasks"""
@@ -25,7 +25,7 @@ class CrawlerManager:
     async def auto_discover_tasks(self):
         """Automatically discover and register all tasks in the tasks package"""
         try:
-            from iroko.crawler import tasks
+            from iroko.tasks import tasks
             package = tasks
             
             for importer, modname, ispkg in pkgutil.iter_modules(package.__path__):

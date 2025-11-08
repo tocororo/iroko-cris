@@ -6,7 +6,7 @@ import traceback
 from typing import Dict, Callable, List
 from dataclasses import dataclass
 
-logger = logging.getLogger('iroko-cris')
+logger = logging.getLogger('iroko-cris.evals')
 
 @dataclass
 class RuleDefinition:

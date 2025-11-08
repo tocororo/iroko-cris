@@ -3,11 +3,11 @@ import logging
 from typing import Dict, Any, List
 from pathlib import Path
 
-from iroko.crawler.task import CrawlerTask
-from iroko.crawler.schemas import TaskExecution
+from iroko.tasks.task import CrawlerTask
+from iroko.tasks.schemas import TaskExecution
 from iroko.hd2neo4j.services import RepositoryService, MapperService
 
-logger = logging.getLogger('iroko-cris.crawler')
+logger = logging.getLogger('iroko-cris.tasks')
 
 class DataImportTask(CrawlerTask):
     """Task for importing data using mapping configurations"""

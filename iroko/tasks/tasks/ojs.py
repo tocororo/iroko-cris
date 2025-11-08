@@ -4,9 +4,9 @@ from abc import abstractmethod
 from typing import Dict, Any, List
 import httpx
 from lxml import html
-from iroko.crawler.schemas import TaskExecution
-from iroko.crawler.task import CrawlerTask
-from iroko.crawler.task import http_task_headers
+from iroko.tasks.schemas import TaskExecution
+from iroko.tasks.task import CrawlerTask
+from iroko.tasks.task import http_task_headers
 from iroko.storage import neo4j_db
 
 logger = logging.getLogger('iroko-cris')

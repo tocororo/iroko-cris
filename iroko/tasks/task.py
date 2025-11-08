@@ -18,7 +18,7 @@ class CrawlerTask(ABC):
         self.task_id = task_id
         self.name = name
         self.config = config or {}
-        self.logger = logging.getLogger(f'iroko-cris.crawler.{task_id}')
+        self.logger = logging.getLogger(f'iroko-cris.tasks.{task_id}')
 
     @abstractmethod
     async def execute(self, execution: TaskExecution) -> Dict[str, Any]:

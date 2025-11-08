@@ -7,7 +7,7 @@ from iroko.evals.schemas import Answer
 from .rules_registry import RulesRegistry
 from .context import EvaluationContext
 
-logger = logging.getLogger('iroko-cris')
+logger = logging.getLogger('iroko-cris.evals')
 
 class EvaluationEngine:
     def __init__(self, rules_registry: RulesRegistry):

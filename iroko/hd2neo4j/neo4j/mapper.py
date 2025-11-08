@@ -11,7 +11,7 @@ from iroko.hd2neo4j.vectors.vectorizer import VectorManager
 import logging
 import traceback
 
-logger = logging.getLogger('iroko-cris')
+logger = logging.getLogger('iroko-cris.hd2neo4j')
 
 
 class Mapper:

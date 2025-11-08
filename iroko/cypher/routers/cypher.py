@@ -14,7 +14,7 @@ import ast
 
 from iroko.cypher.routers.edit import router as edit_router
 
-logger = logging.getLogger('iroko-cris')
+logger = logging.getLogger('iroko-cris.cypher')
 
 router = APIRouter(prefix="/cypher", tags=["cypher"])
 

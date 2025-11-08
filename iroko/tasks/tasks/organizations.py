@@ -7,8 +7,8 @@ import logging
 import uuid
 
 from sqlalchemy import desc
-from iroko.crawler.schemas import TaskExecution
-from iroko.crawler.task import CrawlerTask
+from iroko.tasks.schemas import TaskExecution
+from iroko.tasks.task import CrawlerTask
 from iroko.storage import neo4j_db
 
 logger = logging.getLogger('iroko-cris')

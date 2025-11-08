@@ -13,12 +13,12 @@ import httpx
 from lxml import html
 from neo4j.graph import Node 
 
-from iroko.crawler.schemas import TaskExecution
-from iroko.crawler.task import CrawlerTask
-from iroko.crawler.task import http_task_headers
+from iroko.tasks.schemas import TaskExecution
+from iroko.tasks.task import CrawlerTask
+from iroko.tasks.task import http_task_headers
 from random import randint
 
-logger = logging.getLogger('iroko-cris.crawler')
+logger = logging.getLogger('iroko-cris.tasks')
 
 
 class FixMiarIndexs(CrawlerTask):

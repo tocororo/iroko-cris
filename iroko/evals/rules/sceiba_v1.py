@@ -10,7 +10,7 @@ from ..rules_registry import rules_registry
 
 import logging
 
-logger = logging.getLogger('iroko-cris')
+logger = logging.getLogger('iroko-cris.evals')
 
 # =============================================================================
 # QUESTION RULES for sceiba_v1

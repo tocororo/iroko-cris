@@ -4,19 +4,19 @@ import logging
 import sys
 from pathlib import Path
 
-from iroko.crawler.tasks.identifiers import IdentifierFixTask
-from iroko.crawler.tasks.ojs import OjsProcessingTask
-from iroko.crawler.tasks.orcid import OrcidDumpProcessingTask, OrcidMappingTask
-from iroko.crawler.tasks.organizations import OrganizationsProcessingTask
-from iroko.crawler.tasks.scielo import ScieloProcessingTask
+from iroko.tasks.tasks.identifiers import IdentifierFixTask
+from iroko.tasks.tasks.ojs import OjsProcessingTask
+from iroko.tasks.tasks.orcid import OrcidDumpProcessingTask, OrcidMappingTask
+from iroko.tasks.tasks.organizations import OrganizationsProcessingTask
+from iroko.tasks.tasks.scielo import ScieloProcessingTask
 
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent))
 
-from iroko.crawler.manager import crawler_manager
-from iroko.crawler.schemas import CrawlerTaskConfig
-from iroko.crawler.tasks.dummy_task import DummyTask
-from iroko.crawler.tasks.miar import ColectMiarIndexes, FixMiarIndexs, MiarCubaJournalsCrawler, MiarJournalsProcessingTask
+from iroko.tasks.manager import crawler_manager
+from iroko.tasks.schemas import CrawlerTaskConfig
+from iroko.tasks.tasks.dummy_task import DummyTask
+from iroko.tasks.tasks.miar import ColectMiarIndexes, FixMiarIndexs, MiarCubaJournalsCrawler, MiarJournalsProcessingTask
 
 
 # Setup logging to see the output

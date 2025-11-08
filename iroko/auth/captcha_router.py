@@ -8,7 +8,7 @@ from iroko.database import get_db_session
 
 import logging
 
-logger = logging.getLogger("iroko-cris")
+logger = logging.getLogger("iroko-cris.auth")
 
 router = APIRouter(prefix="/captcha")
 

@@ -8,10 +8,10 @@ import httpx
 from lxml import html 
 
 from iroko.storage import neo4j_db
-from iroko.crawler.schemas import TaskExecution
-from iroko.crawler.task import CrawlerTask
+from iroko.tasks.schemas import TaskExecution
+from iroko.tasks.task import CrawlerTask
 from random import randint
-from iroko.crawler.task import http_task_headers
+from iroko.tasks.task import http_task_headers
 import re
 
 def _convert_x_to_10(x):

@@ -7,7 +7,7 @@ from typing import List, Optional
 import uuid
 
 import logging
-logger = logging.getLogger('iroko-cris')
+logger = logging.getLogger('iroko-cris.auth')
 
 
 from .schemas import TokenUser, UserCreate, UserResponse, UserWithRoles, Token, RoleCreate, RoleResponse

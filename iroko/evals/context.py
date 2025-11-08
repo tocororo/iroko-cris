@@ -6,7 +6,7 @@ import logging
 
 from iroko.evals.schemas import Answer
 
-logger = logging.getLogger('iroko-cris')
+logger = logging.getLogger('iroko-cris.evals')
 
 @dataclass
 class EvaluationContext:

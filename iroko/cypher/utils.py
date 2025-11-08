@@ -4,7 +4,7 @@ import re
 
 import logging
 
-logger = logging.getLogger('iroko-cris')
+logger = logging.getLogger('iroko-cris.cypher')
 
 def validate_cypher_query(query: str, readonly: bool = True):
     """Validate Cypher query for safety"""

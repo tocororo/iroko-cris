@@ -1,7 +1,7 @@
 import asyncio
 import json
-from iroko.crawler.manager import crawler_manager
-from iroko.crawler.schemas import CrawlerTaskConfig
+from iroko.tasks.manager import crawler_manager
+from iroko.tasks.schemas import CrawlerTaskConfig
 
 async def main():
     """Main async function to run your crawler tasks"""

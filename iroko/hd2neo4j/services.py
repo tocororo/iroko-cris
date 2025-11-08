@@ -7,7 +7,7 @@ from .mapping_config.mapping_config import (
 import logging
 
 
-logger = logging.getLogger('iroko-cris')
+logger = logging.getLogger('iroko-cris.hd2neo4j')
 
 
 class RepositoryService:

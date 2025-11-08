@@ -14,7 +14,7 @@ from iroko.storage import neo4j_db
 from iroko.auth.permissions import require_edit_permission
 from iroko.auth.schemas import TokenUser
 
-logger = logging.getLogger('iroko-cris')
+logger = logging.getLogger('iroko-cris.cypher')
 
 router = APIRouter(prefix="/edit", tags=["cypher-edit"])
 

@@ -18,7 +18,7 @@ from .evaluation_engine import EvaluationEngine
 from .context import EvaluationContext
 import logging
 
-logger = logging.getLogger('iroko-cris')
+logger = logging.getLogger('iroko-cris.evals')
 
 class EvaluationService:
     def __init__(self, methodologies_path: str = "methodologies"):

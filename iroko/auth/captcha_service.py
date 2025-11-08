@@ -11,7 +11,7 @@ from sqlalchemy.future import select
 from .models import CaptchaChallenge
 import logging
 
-logger = logging.getLogger('iroko-cris')
+logger = logging.getLogger('iroko-cris.auth')
 
 class CaptchaService:
     def __init__(self, db: AsyncSession):

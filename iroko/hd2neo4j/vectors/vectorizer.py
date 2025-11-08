@@ -7,7 +7,7 @@ import logging
 import importlib.util
 
 
-logger = logging.getLogger('iroko-cris')
+logger = logging.getLogger('iroko-cris.hd2neo4j')
 
 
 class VectorManager:
