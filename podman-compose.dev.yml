@@ -52,33 +52,33 @@ services:
       - iroko-net
     restart: unless-stopped
 
-  memgraph:
-    image: docker.uclv.cu/memgraph/memgraph-mage:latest
-    container_name: iroko-memgraph-mage
-    ports:
-      - "9687:7687" 
-      - "9688:7444"
-    command: ["--log-level=TRACE"]
-    volumes:
-      - mg_lib:/var/lib/memgraph:Z
-      - mg_log:/var/log/memgraph:Z
-    networks:
-      - iroko-net
-    restart: unless-stopped
+  # memgraph:
+  #   image: docker.uclv.cu/memgraph/memgraph-mage:latest
+  #   container_name: iroko-memgraph-mage
+  #   ports:
+  #     - "9687:7687" 
+  #     - "9688:7444"
+  #   command: ["--log-level=TRACE"]
+  #   volumes:
+  #     - mg_lib:/var/lib/memgraph:Z
+  #     - mg_log:/var/log/memgraph:Z
+  #   networks:
+  #     - iroko-net
+  #   restart: unless-stopped
  
-  lab:
-    image: docker.uclv.cu/memgraph/lab:latest
-    container_name: iroko-memgraph-lab
-    ports:
-      - "3001:3000"
-    depends_on:
-      - memgraph
-    environment:
-      - QUICK_CONNECT_MG_HOST=memgraph
-      - QUICK_CONNECT_MG_PORT=9687
-    networks:
-      - iroko-net
-    restart: unless-stopped
+  # lab:
+  #   image: docker.uclv.cu/memgraph/lab:latest
+  #   container_name: iroko-memgraph-lab
+  #   ports:
+  #     - "3001:3000"
+  #   depends_on:
+  #     - memgraph
+  #   environment:
+  #     - QUICK_CONNECT_MG_HOST=memgraph
+  #     - QUICK_CONNECT_MG_PORT=9687
+  #   networks:
+  #     - iroko-net
+  #   restart: unless-stopped
 
 
 volumes:
@@ -90,10 +90,10 @@ volumes:
     driver: local
   postgres_data:
     driver: local
-  mg_lib:
-    driver: local
-  mg_log:
-    driver: local
+  # mg_lib:
+  #   driver: local
+  # mg_log:
+  #   driver: local
     
 networks:
   iroko-net:

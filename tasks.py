@@ -4,7 +4,7 @@ import logging
 import sys
 from pathlib import Path
 
-from iroko.tasks.tasks.identifiers import IdentifierFixTask
+from iroko.tasks.tasks.fixes import IdentifierFixTask, RemoveNotUsedPublications
 from iroko.tasks.tasks.ojs import OjsProcessingTask
 from iroko.tasks.tasks.orcid import OrcidDumpProcessingTask, OrcidMappingTask
 from iroko.tasks.tasks.organizations import OrganizationsProcessingTask
@@ -162,6 +162,26 @@ if __name__ == "__main__":
     #     ), "OrcidDumpProcessingTask")
     # )
 
+    # crawler_manager.register_task_type("IdentifierFixTask", IdentifierFixTask)
+    # asyncio.run(
+    #     add_execute(CrawlerTaskConfig(
+    #         task_id="identifiers_task",
+    #         name="Identifiers tasks",
+    #         config={},
+    #     ), "IdentifierFixTask")
+    # )
+
+
+    crawler_manager.register_task_type("RemoveNotUsedPublications", RemoveNotUsedPublications)
+    asyncio.run(
+        add_execute(CrawlerTaskConfig(
+            task_id="identifiers_task",
+            name="Identifiers tasks",
+            config={ 
+                'output_file': '.data-init/unused_publications.json',
+            },
+        ), "RemoveNotUsedPublications")
+    )
     
     # crawler_manager.register_task_type("OrcidMappingTask", OrcidMappingTask)
     # asyncio.run(
@@ -169,22 +189,16 @@ if __name__ == "__main__":
     #         task_id="orcid_mapping_task",
     #         name="Orcid Mapping processing tasks",
     #         config={
-    #             'input_folder': '.data-init/orcid_test',
-    #             'output_folder': '.data-init/orcid_test_out',
+    #             'input_folder': '.data-init/cuban_researchers',
+    #             'output_folder': '.data-init/cuban_researchers_out',
     #             'diune_path':'.data-init/orgs-onei-duine-septiembre-2025-fix.xlsx',
-    #             'person_schema_path': 'docs/schema/person-v1.0.0-simple.json'
+    #             'person_schema_path': 'docs/schema/person-v1.0.0.json'
     #         },
     #     ), "OrcidMappingTask")
     # )
 
+
         
-    crawler_manager.register_task_type("IdentifierFixTask", IdentifierFixTask)
-    asyncio.run(
-        add_execute(CrawlerTaskConfig(
-            task_id="identifiers_task",
-            name="Identifiers tasks",
-            config={},
-        ), "IdentifierFixTask")
-    )
+
 
     print("🎊 All tasks completed!")

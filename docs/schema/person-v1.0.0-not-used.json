@@ -6,11 +6,11 @@
   "additionalProperties": true,
   "required": [
     "identifiers",
-    "iroko_uuid",
+    "id",
     "name"
   ],
   "properties": {
-    "iroko_uuid": {
+    "id": {
       "type": "string",
       "description": "Iroko UUID, pid_type = perid"
     },
@@ -35,21 +35,17 @@
       "type": "string",
       "description": "The name typically used to refer to the institute."
     },
-    "given_name": {
+    "last_name": {
       "type": "string",
       "description": "The name typically used to refer to the institute."
-    },
-    "family_name": {
-      "type": "string",
-      "description": "The name typically used to refer to the institute."
-    },
-    "biography": {
-      "type": "string",
-      "description": "Biography"
     },
     "public": {
       "type": "boolean",
-      "description": "if is a public profile"
+      "description": "Si el perfil del usuario es publico"
+    },
+    "active": {
+      "type": "boolean",
+      "description": "Si este usuario está activo o no el sistema, si no está activo es como si no existiera pero a los efectos de los usuario administrativos sí existe."
     },
     "gender": {
       "type": "string",
@@ -83,16 +79,23 @@
         "type": "string"
       }
     },
-    "academic_titles": {
+    "research_interests": {
       "type": "array",
-      "description": "Academic Titles",
+      "description": "Vocabulario UNESCO (Por defecto sería el de la UNESCO pero debe ofrecerse cambiar vocabulario a uno de los especializados de la lista que tenemos)",
       "items": {
         "type": "string"
       }
     },
-    "distinctions": {
+    "key_words": {
       "type": "array",
-      "description": "Distinctions and Awards",
+      "description": "Palabras claves, es libre lo que ponga el usuario, es como la especialización dentro de los intereses de investigación. si fuese controlado deberí ser el de la UNESCO",
+      "items": {
+        "type": "string"
+      }
+    },
+    "academic_titles": {
+      "type": "array",
+      "description": "Academic Titles",
       "items": {
         "type": "string"
       }
@@ -105,6 +108,10 @@
         "type": "object",
         "additionalProperties": false,
         "properties": {
+          "id": {
+            "type": "string",
+            "description": "Iroko Organization UUID"
+          },
           "identifiers": {
             "type": "array",
             "description": "Organization Identifiers",
@@ -132,37 +139,31 @@
             "type": "string",
             "format": "date-time"
           },
-          "name": {
+          "label": {
             "type": "string",
-            "description": "The name of the related organization"
+            "description": "The name of the related institute"
           },
           "roles": {
             "type": "array",
             "description": "Roles within the organization",
             "items": {
               "type": "string",
-              "description": "Roles"
+              "description": "Role (use controlled vocabulary)"
             }
-          },
-          "affiliation_type": {
-            "description": "type of the affiliation",
-            "type": "string",
-            "enum": [
-              "employments",
-              "educations",
-              "distinctions",
-              "memberships",
-              "services",
-              "fundings",
-              "invited-positions",
-              "qualifications"
-            ]
           }
         }
       }
     },
-    "peer-review": {
-      "description": "peer-review of the person",
+    "roles_sceiba": {
+      "type": "array",
+      "description": "Roles within the organization",
+      "items": {
+        "type": "string",
+        "description": "Role (use controlled vocabulary)"
+      }
+    },
+    "publications": {
+      "description": "Publications (papers, thesis, etc) of the person",
       "minItems": 0,
       "type": "array",
       "items": {
@@ -186,26 +187,73 @@
               }
             }
           },
-          "start_date": {
-            "description": "Start date ",
+          "id": {
             "type": "string",
-            "format": "date-time"
+            "description": "Iroko UUID"
           },
-          "end_date": {
-            "description": "End date . None means to this date.",
+          "title": {
             "type": "string",
-            "format": "date-time"
-          },
-          "name": {
-            "type": "string",
-            "description": "The name of the related publication"
+            "description": "Title of the publication"
           },
           "roles": {
             "type": "array",
-            "description": "Roles within the peer review process ",
+            "description": "role in the article",
             "items": {
               "type": "string",
-              "description": "Roles"
+              "description": "Role (use controlled vocabulary)"
+            }
+          },
+          "status": {
+            "type": "string",
+            "description": "the status of the relation of the person with the publication (is confirmed by the person or not )",
+            "enum": [
+              "inferred",
+              "confirmed",
+              "rejected"
+            ]
+          }
+        }
+      }
+    },
+    "sources": {
+      "description": "Sources the person is related (journal, repository)",
+      "minItems": 0,
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "identifiers": {
+            "type": "array",
+            "description": "Publication Identifiers",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "idtype": {
+                  "description": "identifier type",
+                  "type": "string"
+                },
+                "value": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "id": {
+            "type": "string",
+            "description": "Iroko UUID"
+          },
+          "name": {
+            "type": "string",
+            "description": "Name of the source"
+          },
+          "roles": {
+            "type": "array",
+            "description": "role in the source (editor, reviewer)",
+            "items": {
+              "type": "string",
+              "description": "Role (use controlled vocabulary)"
             }
           }
         }

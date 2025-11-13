@@ -1,264 +1,271 @@
 {
   "$schema": "http://json-schema.org/draft-04/schema#",
-  "id": "local://iroko/person-v1.0.0.json",
-  "title": "Person Schema, using orcid as a base(...?)",
+  "id": "local://iroko/person-v1.1.0.json",
+  "title": "Person Schema (ORCID-enriched)",
   "type": "object",
   "additionalProperties": true,
   "required": [
     "identifiers",
-    "id",
+    "iroko_uuid",
     "name"
   ],
   "properties": {
-    "id": {
+
+    "iroko_uuid": {
       "type": "string",
       "description": "Iroko UUID, pid_type = perid"
     },
+
     "identifiers": {
       "type": "array",
-      "description": "Person Identifiers",
+      "description": "Person Identifiers, including researcher profiles",
       "items": {
         "type": "object",
-        "additionalProperties": false,
+        "additionalProperties": true,
+        "required": ["idtype", "value"],
         "properties": {
           "idtype": {
-            "description": "identifier type",
-            "type": "string"
+            "type": "string",
+            "description": "Identifier type (e.g., orcid, scopus-id, profile-url)"
           },
           "value": {
             "type": "string"
+          },
+          "relationship": {
+            "type": "string",
+            "description": "ORCID relationship (self / part-of / version-of)",
+            "enum": ["self", "part-of", "version-of"]
           }
         }
       }
     },
+
     "name": {
       "type": "string",
-      "description": "The name typically used to refer to the institute."
+      "description": "Full name of the person"
     },
-    "last_name": {
-      "type": "string",
-      "description": "The name typically used to refer to the institute."
+
+    "given_name": {
+      "type": "string"
     },
+
+    "family_name": {
+      "type": "string"
+    },
+
+    "biography": {
+      "type": "string"
+    },
+
     "public": {
       "type": "boolean",
-      "description": "Si el perfil del usuario es publico"
+      "description": "Whether the ORCID profile is public"
     },
-    "active": {
-      "type": "boolean",
-      "description": "Si este usuario está activo o no el sistema, si no está activo es como si no existiera pero a los efectos de los usuario administrativos sí existe."
-    },
+
     "gender": {
-      "type": "string",
-      "description": "any string describing gender"
+      "type": "string"
     },
+
     "country": {
       "type": "object",
-      "description": "Country",
+      "description": "Primary residence country",
       "properties": {
         "code": {
           "type": "string",
-          "description": "The ISO 3166-1 alpha-2 code of the country"
+          "description": "ISO 3166-1 alpha-2 code"
         },
         "name": {
-          "type": "string",
-          "description": "The name of the country"
+          "type": "string"
         }
       }
     },
-    "email_addresses": {
+
+    "addresses": {
       "type": "array",
-      "description": "A list of email addresses",
-      "items": {
-        "type": "string"
-      }
-    },
-    "aliases": {
-      "type": "array",
-      "description": "A list of other names the person is known as",
-      "items": {
-        "type": "string"
-      }
-    },
-    "research_interests": {
-      "type": "array",
-      "description": "Vocabulario UNESCO (Por defecto sería el de la UNESCO pero debe ofrecerse cambiar vocabulario a uno de los especializados de la lista que tenemos)",
-      "items": {
-        "type": "string"
-      }
-    },
-    "key_words": {
-      "type": "array",
-      "description": "Palabras claves, es libre lo que ponga el usuario, es como la especialización dentro de los intereses de investigación. si fuese controlado deberí ser el de la UNESCO",
-      "items": {
-        "type": "string"
-      }
-    },
-    "academic_titles": {
-      "type": "array",
-      "description": "Academic Titles",
-      "items": {
-        "type": "string"
-      }
-    },
-    "affiliations": {
-      "description": "Affiliations of the person",
-      "minItems": 0,
-      "type": "array",
+      "description": "List of postal addresses",
       "items": {
         "type": "object",
-        "additionalProperties": false,
+        "additionalProperties": true,
         "properties": {
-          "id": {
-            "type": "string",
-            "description": "Iroko Organization UUID"
-          },
-          "identifiers": {
-            "type": "array",
-            "description": "Organization Identifiers",
-            "items": {
-              "type": "object",
-              "additionalProperties": false,
-              "properties": {
-                "idtype": {
-                  "description": "identifier type",
-                  "type": "string"
-                },
-                "value": {
-                  "type": "string"
-                }
+          "city": { "type": "string" },
+          "region": { "type": "string" },
+          "country": {
+            "type": "object",
+            "required": ["code"],
+            "properties": {
+              "code": {
+                "type": "string",
+                "description": "ISO 3166-1 alpha-2 code"
+              },
+              "name": {
+                "type": "string"
               }
-            }
-          },
-          "start_date": {
-            "description": "Start date of the affiliation",
-            "type": "string",
-            "format": "date-time"
-          },
-          "end_date": {
-            "description": "End date of the affiliation. None means to this date.",
-            "type": "string",
-            "format": "date-time"
-          },
-          "label": {
-            "type": "string",
-            "description": "The name of the related institute"
-          },
-          "roles": {
-            "type": "array",
-            "description": "Roles within the organization",
-            "items": {
-              "type": "string",
-              "description": "Role (use controlled vocabulary)"
             }
           }
         }
       }
     },
-    "roles_sceiba": {
+
+    "email_addresses": {
       "type": "array",
-      "description": "Roles within the organization",
-      "items": {
-        "type": "string",
-        "description": "Role (use controlled vocabulary)"
-      }
+      "items": { "type": "string" }
     },
-    "publications": {
-      "description": "Publications (papers, thesis, etc) of the person",
-      "minItems": 0,
+
+    "aliases": {
       "type": "array",
+      "items": { "type": "string" }
+    },
+
+    "keywords": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+
+    "affiliations": {
+      "description": "Relationships between the person and any organization",
+      "type": "array",
+      "minItems": 0,
       "items": {
         "type": "object",
-        "additionalProperties": false,
+        "additionalProperties": true,
         "properties": {
+
           "identifiers": {
             "type": "array",
-            "description": "Publication Identifiers",
+            "description": "Organization identifiers",
             "items": {
               "type": "object",
-              "additionalProperties": false,
+              "additionalProperties": true,
+              "required": ["idtype", "value"],
               "properties": {
-                "idtype": {
-                  "description": "identifier type",
-                  "type": "string"
-                },
-                "value": {
-                  "type": "string"
+                "idtype": { "type": "string" },
+                "value": { "type": "string" },
+                "relationship": {
+                  "type": "string",
+                  "enum": ["self", "part-of", "version-of"]
                 }
               }
             }
           },
-          "id": {
-            "type": "string",
-            "description": "Iroko UUID"
+          "country": {
+            "type": "object",
+            "properties": {
+              "code": { "type": "string" },
+              "name": { "type": "string" }
+            }
           },
-          "title": {
+          "start_date": {
             "type": "string",
-            "description": "Title of the publication"
+            "format": "date",
+            "description": "Start date of the affiliation"
+          },
+
+          "end_date": {
+            "type": "string",
+            "format": "date",
+            "description": "End date of the affiliation"
+          },
+
+          "name": {
+            "type": "string",
+            "description": "Name of the related organization"
+          },
+          "department_name": {
+            "type": "string",
+            "description": "Name of the department within the related organization"
           },
           "roles": {
             "type": "array",
-            "description": "role in the article",
-            "items": {
-              "type": "string",
-              "description": "Role (use controlled vocabulary)"
-            }
+            "items": { "type": "string" }
           },
-          "status": {
+
+          "affiliation_type": {
             "type": "string",
-            "description": "the status of the relation of the person with the publication (is confirmed by the person or not )",
+            "description": "ORCID activity type",
             "enum": [
-              "inferred",
-              "confirmed",
-              "rejected"
+              "employments",
+              "educations",
+              "qualifications",
+              "invited-positions",
+              "distinctions",
+              "memberships",
+              "services",
+              "fundings"
             ]
           }
         }
       }
     },
-    "sources": {
-      "description": "Sources the person is related (journal, repository)",
-      "minItems": 0,
+
+    "peer-review": {
+      "description": "Peer-review relationships between the person and publications",
       "type": "array",
+      "minItems": 0,
       "items": {
         "type": "object",
-        "additionalProperties": false,
+        "additionalProperties": true,
         "properties": {
+
           "identifiers": {
             "type": "array",
-            "description": "Publication Identifiers",
+            "description": "Publication identifiers",
             "items": {
               "type": "object",
-              "additionalProperties": false,
+              "additionalProperties": true,
+              "required": ["idtype", "value"],
               "properties": {
-                "idtype": {
-                  "description": "identifier type",
-                  "type": "string"
-                },
-                "value": {
-                  "type": "string"
+                "idtype": { "type": "string" },
+                "value": { "type": "string" },
+                "relationship": {
+                  "type": "string",
+                  "enum": ["self", "part-of", "version-of"]
                 }
               }
             }
           },
-          "id": {
+
+          "start_date": {
             "type": "string",
-            "description": "Iroko UUID"
+            "format": "date"
           },
-          "name": {
+
+          "end_date": {
             "type": "string",
-            "description": "Name of the source"
+            "format": "date"
+          },
+
+          "organization": {
+            "type": "object",
+            "description": "convening organization",
+            "items": {
+              "name": {
+                "type": "string"
+              },
+              "identifiers": {
+                "type": "array",
+                "description": "Publication identifiers",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "required": ["idtype", "value"],
+                  "properties": {
+                    "idtype": { "type": "string" },
+                    "value": { "type": "string" },
+                    "relationship": {
+                      "type": "string",
+                      "enum": ["self", "part-of", "version-of"]
+                    }
+                  }
+                }
+              }
+            }
           },
           "roles": {
             "type": "array",
-            "description": "role in the source (editor, reviewer)",
-            "items": {
-              "type": "string",
-              "description": "Role (use controlled vocabulary)"
-            }
+            "items": { "type": "string" }
           }
         }
       }
     }
   }
 }
-

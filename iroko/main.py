@@ -28,7 +28,7 @@ logger = logging.getLogger('iroko-cris')
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
-    logger.info(f"Starting Iroko API in {app_settings.app_env} environment")
+    logger.info(f"Starting Iroko CRIS in {app_settings.app_env} environment")
     
     if app_settings.app_env != "test":
         try:
@@ -39,7 +39,6 @@ async def lifespan(app: FastAPI):
             await initialize_auth_system()
             
             await crawler_manager.auto_discover_tasks()
-            logger.info("Crawler manager initialized with auto-discovered tasks")
 
             await eval_service.load_methodologies()
             await eval_service.validate_methodology_rules()

@@ -1,15 +1,136 @@
+import json
 import re
 from typing import Dict, Any, List
 import logging
 import uuid
 
-
+from pathlib import Path
 
 from iroko.tasks.schemas import TaskExecution
 from iroko.tasks.task import CrawlerTask
 from iroko.storage import neo4j_db
 
 logger = logging.getLogger('iroko-cris')
+
+"""
+one run tasks to fix data
+
+"""
+
+class RemoveNotUsedPublications(CrawlerTask):
+
+    def __init__(self, task_id: str, name: str, config: Dict[str, Any] = None):
+        super().__init__(task_id, name, config)
+
+    async def execute(self, execution: TaskExecution) -> Dict[str, Any]:
+        """
+        Execute the identifier fix task.
+        
+        - Renames 'id' properties to 'iroko_uuid' if the value is a UUID.
+        - Converts properties like 'identifier#CODE' into relationships with new 'Identifier' nodes.
+        """
+        session = None
+        deleted_data = []
+        try:
+            session = await neo4j_db.get_session()
+            
+            # First, find the publications, their connected objects, and relationships
+            find_query = """
+            MATCH (p:Publication)
+            WHERE ALL(relType IN [(p)-[r]-() | type(r)] 
+                    WHERE relType = 'HAS' OR relType = 'HAS_IDENTIFIER')
+            OPTIONAL MATCH (p)-[r]-(connected)
+            RETURN p, 
+                COLLECT(DISTINCT connected) AS connected_nodes,
+                COLLECT(DISTINCT {type: type(r), properties: properties(r)}) AS relationships
+            """
+
+            result = await session.run(find_query)
+            deleted_data = []
+
+            async for record in result:
+                publication_data = record["p"]
+                connected_nodes = record["connected_nodes"]
+                relationships = record["relationships"]
+                
+                # Save the deleted publication and its related objects
+                deleted_entry = {
+                    "deleted_publication": dict(publication_data),
+                    "connected_nodes": [dict(node) for node in connected_nodes if node is not None],
+                    "relationships": relationships
+                }
+                deleted_data.append(deleted_entry)
+
+            # Delete the publications AND their connected nodes
+            delete_query = """
+            MATCH (p:Publication)
+            WHERE ALL(relType IN [(p)-[r]-() | type(r)] 
+                    WHERE relType = 'HAS' OR relType = 'HAS_IDENTIFIER')
+            WITH p, [(p)-[r]-(connected) | connected] AS connected_nodes
+            UNWIND connected_nodes AS node_to_delete
+            WITH DISTINCT node_to_delete, p
+            DETACH DELETE node_to_delete, p
+            RETURN COUNT(DISTINCT p) AS publications_deleted, 
+                COUNT(DISTINCT node_to_delete) AS connected_nodes_deleted
+            """
+
+            delete_result = await session.run(delete_query)
+            delete_record = await delete_result.single()
+
+            publications_deleted = delete_record["publications_deleted"] if delete_record else 0
+            connected_nodes_deleted = delete_record["connected_nodes_deleted"] if delete_record else 0
+
+            # Save deleted data to JSON file
+            output_path = Path(self.config.get("output_file", "deleted_publications.json"))
+            with open(output_path, "w", encoding="utf-8") as f:
+                json.dump({
+                    "deleted_publications": deleted_data,
+                    "summary": {
+                        "publications_deleted": publications_deleted,
+                        "connected_nodes_deleted": connected_nodes_deleted,
+                        "total_deleted": publications_deleted + connected_nodes_deleted
+                    }
+                }, f, indent=2, ensure_ascii=False, default=str)
+
+            self.logger.info(f"Removed {publications_deleted} publications and {connected_nodes_deleted} connected nodes, saved to {output_path}")
+
+            return {
+                "publications_deleted": publications_deleted,
+                "connected_nodes_deleted": connected_nodes_deleted,
+                "output_file": str(output_path)
+            }
+
+        except Exception as e:
+            self.logger.error(f"Error executing RemoveNotUsedPublications: {e}", exc_info=True)
+            raise
+            
+        finally:
+            if session:
+                await session.close()
+
+    def validate_config(self) -> bool:
+        """
+        Validate task configuration.
+        
+        Returns:
+            True if configuration is valid
+        """
+        # Check if output_file is provided and is a string
+        if self.config:
+            if "output_file" in self.config and not isinstance(self.config["output_file"], str):
+                return False
+        return True
+
+    def get_dependencies(self) -> List[str]:
+        """
+        Get list of task IDs that this task depends on.
+        
+        Returns:
+            List of task IDs
+        """
+        # This task might depend on data import tasks, but no specific dependencies are required by the base definition
+        return []
+
 
 class IdentifierFixTask(CrawlerTask):
     """Crawler task to fix identifier properties in the neo4j database."""
