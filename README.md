@@ -17,7 +17,9 @@ https://hub.researchgraph.org/typesense-and-neo4j-in-a-hybrid-information-retrie
 uvicorn iroko.main:app --reload --host 0.0.0.0 --port 8000 --ssl-keyfile haproxy/ssl/iroko.key --ssl-certfile haproxy/ssl/iroko.crt
 
 ```
-
+```bash
+./deploy.sh  --start-from api --build 
+```
 ## podman
 
 podman-compose build --no-cache

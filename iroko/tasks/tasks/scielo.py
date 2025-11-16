@@ -115,7 +115,7 @@ class ScieloProcessingTask(CrawlerTask):
 
     async def _process_journals_to_neo4j(self, all_journals: list, data: dict):
         """Process journals and create IN_INDEX relationships in Neo4j."""
-        session = await neo4j_db.get_session()
+        session = neo4j_db.get_session()
         processed_count = 0
         error_count = 0
 

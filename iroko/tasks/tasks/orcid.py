@@ -23,7 +23,6 @@ import asyncio
 import json
 import re
 import pandas as pd
-from jsonschema import validate, ValidationError
 import xmltodict
 
 from iroko.tasks.tasks import organizations
@@ -63,7 +62,7 @@ class OrcidDumpProcessingTask(CrawlerTask):
             
         try:
             # Get Neo4j session for database operations
-            session = await neo4j_db.get_session()
+            session = neo4j_db.get_session()
             
             # Process all ORCID files in the dump structure
             results = await self._process_orcid_dump(session)
@@ -1282,10 +1281,6 @@ class OrcidMappingTask(CrawlerTask):
                 with open(output_path, 'w', encoding='utf-8') as f:
                     json.dump(person, f, ensure_ascii=False, indent=2)
  
-            except ValidationError as ve:
-                self.logger.error(f"Validation error for {filename}: {ve}")
-                # Optionally, continue processing other files or raise
-                # raise
             except ET.ParseError as pe:
                 self.logger.error(f"XML parsing error for {filename}: {pe}")
                 # Optionally, continue processing other files or raise
@@ -1332,8 +1327,7 @@ class OrcidMappingTask(CrawlerTask):
 
         self.no_orcid_file = os.path.join(f'{self.output_folder}_nodes', "no_orcid.json")
         self.no_orcid = []
-
-        session = await neo4j_db.get_session()
+        
         try:
             for idx, filename in enumerate(json_files):
                 self.logger.info(f"Ingesting file {idx + 1}/{total_files}: {filename}")
@@ -1352,18 +1346,19 @@ class OrcidMappingTask(CrawlerTask):
                     continue
                 
                 try:
-                    await session.execute_write(
-                    self._ingest_person_unit_of_work, person_data, orcid_id
-                )
+                    async with neo4j_db.get_session() as session:
+                        await session.execute_write(
+                        self._ingest_person_unit_of_work, person_data, orcid_id
+                    )
                 except Exception as e:
                     self.logger.error(f"Failed to ingest {filename} within a transaction. Rolling back. Error: {e}", exc_info=True)
-                    await self._copy_failed_file(input_path, filename)
+                    await self._copy_failed_file(input_path, filename, self.failed_folder)
 
             # Save created organizations to files
             self._save_new_nodes_to_file()
 
-        finally:
-            await session.close()
+        except Exception as e:
+            self.logger.error(f"Failed to start ingest ", exc_info=True)
 
     async def _ingest_person_unit_of_work(self, tx, person_data, orcid_id):
         """
@@ -1387,16 +1382,17 @@ class OrcidMappingTask(CrawlerTask):
             for review in peer_reviews:
                 await self._create_or_link_peer_review(tx, person_data, review, orcid_id)
         else:
-            self._copy_failed_file(self.no_country_folder, f'{orcid_id}.xml')
+            input_path = os.path.join(self.input_folder, f'{orcid_id}.xml')
+            await self._copy_failed_file(input_path, f'{orcid_id}.xml', self.no_country_folder)
         
 
-    async def _copy_failed_file(self, source_path: str, filename: str):
+    async def _copy_failed_file(self, source_path: str, filename: str, destination_folder: str):
         """Moves a file that failed ingestion to the designated 'failed' directory."""
         if not self.failed_folder:
             self.logger.error("The 'failed_folder' path is not configured. Cannot move the file.")
             return
 
-        destination_path = os.path.join(self.failed_folder, filename)
+        destination_path = os.path.join(destination_folder, filename)
         try:
             # shutil.move is a synchronous (blocking) operation, but it's typically
             # very fast and acceptable to call within an async method for local file operations.
@@ -1840,10 +1836,21 @@ class OrcidMappingTask(CrawlerTask):
             if 'mainTitle' in item:
                 main_title = item['mainTitle']
                 break
-        
+
         if not main_title:
             return None
-        
+
+        # Normalize main_title: handle both string and list cases
+        if isinstance(main_title, list):
+            # Optionally filter out non-strings and join
+            main_title = " | ".join(str(t) for t in main_title if t is not None)
+        elif isinstance(main_title, str):
+            # Already a string, use as-is
+            pass
+        else:
+            # Unexpected type (e.g., dict, number) — fallback to string representation or skip
+            main_title = str(main_title)
+
         query = """
         CREATE (pub:Publication {
             iroko_uuid: $iroko_uuid,
@@ -1851,7 +1858,6 @@ class OrcidMappingTask(CrawlerTask):
         })
         RETURN pub.iroko_uuid as iroko_uuid, pub.name as name
         """
-        
         result = await session.run(query,
             iroko_uuid=pub_uuid,
             name=main_title

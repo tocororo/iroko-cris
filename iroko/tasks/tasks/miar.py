@@ -35,7 +35,7 @@ class FixMiarIndexs(CrawlerTask):
             Dictionary with execution results
         """
         execution.execution_log.append("load data")
-        session = await neo4j_db.get_session()
+        session = neo4j_db.get_session()
         data_file = self.config.get("data_file")        
         
         with open(data_file, 'r') as f:
@@ -257,7 +257,7 @@ class ColectMiarIndexes(CrawlerTask):
             Dictionary with execution results
         """
         execution.execution_log.append("load data")
-        session = await neo4j_db.get_session()
+        session = neo4j_db.get_session()
         async with httpx.AsyncClient(
             headers=http_task_headers,
             timeout=30.0
@@ -540,7 +540,7 @@ class MiarJournalsProcessingTask(CrawlerTask):
         }
 
         # Get Neo4j session
-        session = await neo4j_db.get_session()
+        session = neo4j_db.get_session()
         
         try:
             # --- Step 1: Process Journals ---

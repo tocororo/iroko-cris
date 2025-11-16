@@ -15,7 +15,7 @@ from iroko.database import get_db_session as get_sql_session
 router = APIRouter(prefix="/evals", tags=["evaluations"])
 
 async def get_neo4j_session():
-    session = await neo4j_db.get_session()
+    session = neo4j_db.get_session()
     try:
         yield session
     finally:

@@ -32,7 +32,7 @@ class RemoveNotUsedPublications(CrawlerTask):
         session = None
         deleted_data = []
         try:
-            session = await neo4j_db.get_session()
+            session = neo4j_db.get_session()
             
             # First, find the publications, their connected objects, and relationships
             find_query = """
@@ -151,7 +151,7 @@ class IdentifierFixTask(CrawlerTask):
         """
         session = None
         try:
-            session = await neo4j_db.get_session()
+            session = neo4j_db.get_session()
             
             # Step 1: Find nodes with 'id' property that is a UUID string and rename it
             self.logger.info("Starting to process 'id' properties to 'iroko_uuid'...")

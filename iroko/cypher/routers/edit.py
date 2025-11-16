@@ -20,7 +20,7 @@ router = APIRouter(prefix="/edit", tags=["cypher-edit"])
 
 async def get_db_session():
     """Async generator for Neo4j sessions"""
-    session = await neo4j_db.get_session()
+    session = neo4j_db.get_session()
     try:
         yield session
     finally:

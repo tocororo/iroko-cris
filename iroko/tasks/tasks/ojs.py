@@ -29,7 +29,7 @@ class OjsProcessingTask(CrawlerTask):
         self.logger.info(f"Starting OJS processing task {self.task_id}")
 
         # Get Neo4j session
-        session = await neo4j_db.get_session()
+        session = neo4j_db.get_session()
 
         # Result counters
         results = {

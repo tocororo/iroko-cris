@@ -27,7 +27,7 @@ CSV_FILENAME_FORMAT = "export_%Y%m%d_%H%M%S.csv"
 
 async def get_db_session():
     """Async generator for Neo4j sessions"""
-    session = await neo4j_db.get_session()
+    session = neo4j_db.get_session()
     try:
         yield session
     finally:

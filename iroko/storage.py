@@ -17,7 +17,7 @@ class Neo4jDB:
     async def close(self):
         await self._driver.close()
     
-    async def get_session(self):
+    def get_session(self):
         return self._driver.session()
 
 neo4j_db = Neo4jDB()

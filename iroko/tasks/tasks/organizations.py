@@ -55,7 +55,7 @@ class OrganizationsProcessingTask(CrawlerTask):
             "ror_not_found": []
         }
         
-        session = await neo4j_db.get_session()
+        session = neo4j_db.get_session()
         
         try:
             # STEP 1: Process codepa

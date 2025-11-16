@@ -32,7 +32,7 @@ async def lifespan(app: FastAPI):
     
     if app_settings.app_env != "test":
         try:
-            await neo4j_db.get_session()
+            neo4j_db.get_session()
             
             await init_db()
             

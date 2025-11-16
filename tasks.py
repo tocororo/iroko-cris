@@ -172,16 +172,16 @@ if __name__ == "__main__":
     # )
 
 
-    crawler_manager.register_task_type("RemoveNotUsedPublications", RemoveNotUsedPublications)
-    asyncio.run(
-        add_execute(CrawlerTaskConfig(
-            task_id="identifiers_task",
-            name="Identifiers tasks",
-            config={ 
-                'output_file': '.data-init/unused_publications.json',
-            },
-        ), "RemoveNotUsedPublications")
-    )
+    # crawler_manager.register_task_type("RemoveNotUsedPublications", RemoveNotUsedPublications)
+    # asyncio.run(
+    #     add_execute(CrawlerTaskConfig(
+    #         task_id="identifiers_task",
+    #         name="Identifiers tasks",
+    #         config={ 
+    #             'output_file': '.data-init/unused_publications.json',
+    #         },
+    #     ), "RemoveNotUsedPublications")
+    # )
     
     # crawler_manager.register_task_type("OrcidMappingTask", OrcidMappingTask)
     # asyncio.run(
