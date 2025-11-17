@@ -56,11 +56,7 @@ requires = ["poetry-core>=2.0.0,<3.0.0"]
 build-backend = "poetry.core.masonry.api"
 
 [tool.poetry.group.dev.dependencies]
-hd2neo4j = {path = "/home/malayo/dev/hd2neo4j", develop = true}
-flet = {extras = ["all"], version = "0.27.2"}
 linkml = "^1.9.2"
 loguru = "^0.7.3"
 sentry-sdk = "^2.38.0"
-flet-model = "^0.1.5"
 zxcvbn = "^4.5.0"
-httpx = "^0.28.1"
