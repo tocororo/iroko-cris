@@ -1,5 +1,6 @@
 from pydantic import BaseModel, Field, UUID4, field_validator
 from typing import List, Dict, Any, Optional
+from datetime import datetime
 import re
 
 class RelationshipItem(BaseModel):
@@ -21,7 +22,6 @@ class NodeBase(BaseModel):
 
     @field_validator('labels')
     def validate_labels(cls, v):
-        # Basic sanitization for labels
         for label in v:
             if not label.isalnum():
                 raise ValueError(f"Label '{label}' must be alphanumeric")
@@ -35,6 +35,20 @@ class NodeUpdate(NodeBase):
 
 class NodeResponse(NodeBase):
     iroko_uuid: UUID4
+    updated_at: Optional[datetime] = None
 
     class Config:
         from_attributes = True
+
+class SyncStatus(BaseModel):
+    pg_node_count: int
+    graph_node_count: int
+    pg_updated_at: Optional[datetime] = None
+    graph_updated_at: Optional[datetime] = None
+    last_sync_at: Optional[datetime] = None
+    last_sync_direction: Optional[str] = None
+
+class SyncRequest(BaseModel):
+    direction: str = Field(..., pattern=r"^(to-graph|from-graph)$")
+    batch_size: int = Field(default=500, ge=1, le=5000)
+    since: Optional[datetime] = None

@@ -3,7 +3,7 @@ from typing import List
 from .router import get_current_user
 from .schemas import TokenUser
 
-async def require_permission(permission: str):
+def require_permission(permission: str):
     async def permission_checker(
         current_user: TokenUser = Depends(get_current_user)
     ):

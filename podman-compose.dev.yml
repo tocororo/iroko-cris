@@ -1,7 +1,6 @@
 version: '3.8'
 
 services:
-
   postgres:
     image: quay.io/lib/postgres:16-alpine
     container_name: iroko-postgres
@@ -29,7 +28,7 @@ services:
     image: docker.uclv.cu/memgraph/memgraph-mage:latest
     container_name: iroko-memgraph-mage
     ports:
-      - "7688:7687" 
+      - "7687:7687" 
       - "7444:7444"
     command: ["--log-level=TRACE"]
     volumes:
@@ -46,6 +45,7 @@ services:
       interval: 10s
       timeout: 5s
       retries: 10
+
   lab:
     image: docker.uclv.cu/memgraph/lab:latest
     container_name: iroko-memgraph-lab
@@ -62,7 +62,6 @@ services:
       - iroko-net
     restart: unless-stopped
 
-
 volumes:
   postgres_data:
     driver: local
@@ -70,6 +69,7 @@ volumes:
     driver: local
   mg_log:
     driver: local
+
 networks:
   iroko-net:
     driver: bridge

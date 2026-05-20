@@ -1,17 +1,35 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
-from sqlalchemy import delete
+from sqlalchemy import delete, func as sqla_func
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from neo4j import AsyncSession as Neo4jSession
 from uuid import UUID
-from typing import List, Optional
+from typing import List, Optional, Dict, Any, Tuple
+from datetime import datetime
 import logging
 import uuid
 
 from .models import Node
-from .schemas import NodeCreate, NodeUpdate
+from .schemas import NodeCreate, NodeUpdate, SyncStatus
 
 logger = logging.getLogger('iroko-cris.nodes')
+
+
+def _build_label_set_query(iroko_uuid: str, labels: List[str]) -> Tuple[str, dict]:
+    """Build a Cypher query to set labels on a node without APOC.
+
+    Memgraph does not support apoc.create.setLabels, so we build
+    the SET clause dynamically with label literals.
+    """
+    all_labels = list(set(labels + ["Node"]))
+    label_part = ":".join(all_labels)
+    query = f"""
+    MATCH (n {{iroko_uuid: $uuid}})
+    SET n{":" + label_part if label_part else ""}
+    SET n._updated_at = $now
+    """
+    return query, {"uuid": iroko_uuid, "now": datetime.utcnow().isoformat()}
+
 
 class NodeService:
     def __init__(self, db: AsyncSession, mg: Neo4jSession):
@@ -21,47 +39,53 @@ class NodeService:
     async def _sync_to_memgraph(self, node: Node):
         """
         Syncs Node + Labels + Relationships to Memgraph.
+        Uses plain Cypher (no APOC) for Memgraph compatibility.
         """
         try:
-            # 1. Merge Node (Idempotent creation base)
-            # We use a base label :Node for easy retrieval by UUID, 
-            # specific labels are applied next.
+            node_uuid = str(node.iroko_uuid)
+
+            # 1. Merge Node base
             merge_query = """
             MERGE (n:Node {iroko_uuid: $uuid})
             SET n.name = $name
+            SET n._updated_at = $now
             RETURN n
             """
-            await self.mg.run(merge_query, uuid=str(node.iroko_uuid), name=node.name)
+            await self.mg.run(merge_query, uuid=node_uuid, name=node.name, now=datetime.utcnow().isoformat())
 
-            # 2. Apply Labels
-            # We use APOC to dynamically overwrite labels.
-            # This ensures if we remove a label in Postgres, it's removed in Graph.
-            # We always keep the 'Node' label for system indexing.
-            all_labels = list(set(node.labels + ["Node"]))
-            
-            label_query = """
-            MATCH (n:Node {iroko_uuid: $uuid})
-            CALL apoc.create.setLabels(n, $labels) YIELD node
-            RETURN node
-            """
-            await self.mg.run(label_query, uuid=str(node.iroko_uuid), labels=all_labels)
+            # 2. Apply Labels (no APOC — dynamic query building)
+            label_query, label_params = _build_label_set_query(node_uuid, node.labels)
+            await self.mg.run(label_query, label_params)
 
-            # 3. Sync Relationships (Reset approach)
-            # Remove all outgoing edges
+            # 3. Sync node properties from data JSON
+            if node.data:
+                set_clauses = []
+                data_params = {"uuid": node_uuid}
+                for i, (key, value) in enumerate(node.data.items()):
+                    sanitized = key.replace('`', '').replace('\\', '')
+                    param = f"data_{i}"
+                    set_clauses.append(f"n.`{sanitized}` = ${param}")
+                    data_params[param] = value
+                if set_clauses:
+                    prop_query = f"""
+                    MATCH (n:Node {{iroko_uuid: $uuid}})
+                    SET {', '.join(set_clauses)}
+                    """
+                    await self.mg.run(prop_query, data_params)
+
+            # 4. Sync Relationships (reset approach)
             delete_rels_query = """
             MATCH (n:Node {iroko_uuid: $uuid})-[r]->()
             DELETE r
             """
-            await self.mg.run(delete_rels_query, uuid=str(node.iroko_uuid))
+            await self.mg.run(delete_rels_query, uuid=node_uuid)
 
-            # Recreate edges from JSON blueprint
             if node.relationships:
                 for rel in node.relationships:
                     if not isinstance(rel, dict):
                         rel = rel.model_dump()
 
                     rel_type = rel['type']
-                    # Note: target must exist (or be created as ghost node)
                     edge_query = f"""
                     MATCH (source:Node {{iroko_uuid: $source_uuid}})
                     MERGE (target:Node {{iroko_uuid: $target_uuid}})
@@ -69,15 +93,10 @@ class NodeService:
                     SET r += $props
                     """
                     await self.mg.run(edge_query, {
-                        "source_uuid": str(node.iroko_uuid),
+                        "source_uuid": node_uuid,
                         "target_uuid": str(rel['target_uuid']),
                         "props": rel.get('properties', {})
                     })
-
-            # TODO: add node properties based on a config depending on label.
-            # 4. add sync node properties depending on label config. 
-
-
 
             logger.debug(f"Synced node {node.iroko_uuid} to Memgraph")
 
@@ -86,7 +105,6 @@ class NodeService:
             raise e
 
     async def create_node(self, node_in: NodeCreate) -> Node:
-        # 1. Save to Postgres
         db_node = Node(
             name=node_in.name,
             labels=node_in.labels,
@@ -97,11 +115,9 @@ class NodeService:
         await self.db.commit()
         await self.db.refresh(db_node)
 
-        # 2. Sync to Memgraph
         try:
             await self._sync_to_memgraph(db_node)
         except Exception as e:
-            # Basic rollback logic could go here
             logger.error("PG saved, MG failed")
             raise e
 
@@ -118,7 +134,7 @@ class NodeService:
         db_node.labels = node_in.labels
         db_node.data = node_in.data
         db_node.relationships = [r.model_dump() for r in node_in.relationships]
-        
+
         await self.db.commit()
         await self.db.refresh(db_node)
 
@@ -139,7 +155,7 @@ class NodeService:
     async def delete_node(self, uuid: UUID) -> bool:
         result = await self.db.execute(select(Node).where(Node.iroko_uuid == uuid))
         db_node = result.scalar_one_or_none()
-        
+
         if not db_node:
             return False
 
@@ -151,6 +167,249 @@ class NodeService:
 
         return True
 
+    # ------------------------------------------------------------------
+    # Sync: PG -> Memgraph (reconstruct graph from nodes table)
+    # ------------------------------------------------------------------
+
+    async def sync_all_to_memgraph(self, batch_size: int = 500) -> dict:
+        """Full graph reconstruction: iterate all nodes in PG and recreate
+        them in Memgraph. Old graph data is DETACH DELETEd first."""
+        logger.warning("Starting full PG -> Memgraph sync (graph will be rebuilt)")
+
+        count_result = await self.db.execute(select(sqla_func.count(Node.iroko_uuid)))
+        total = count_result.scalar() or 0
+
+        if total == 0:
+            return {"status": "success", "nodes_synced": 0, "message": "No nodes in PG"}
+
+        # Clear existing graph
+        await self.mg.run("MATCH (n:Node) DETACH DELETE n")
+
+        synced = 0
+        offset = 0
+        while offset < total:
+            result = await self.db.execute(
+                select(Node).order_by(Node.iroko_uuid).offset(offset).limit(batch_size)
+            )
+            batch = result.scalars().all()
+            for node in batch:
+                try:
+                    await self._sync_to_memgraph(node)
+                    synced += 1
+                except Exception as e:
+                    logger.error(f"Failed to sync node {node.iroko_uuid}: {e}")
+            offset += batch_size
+            logger.info(f"Synced {synced}/{total} nodes to Memgraph")
+
+        return {"status": "success", "nodes_synced": synced, "total_in_pg": total}
+
+    # ------------------------------------------------------------------
+    # Sync: Memgraph -> PG (import from graph into nodes table)
+    # ------------------------------------------------------------------
+
+    async def _fetch_graph_node(self, mg_uuid: str) -> Optional[dict]:
+        """Fetch a single node from Memgraph by iroko_uuid."""
+        query = """
+        MATCH (n {iroko_uuid: $uuid})
+        OPTIONAL MATCH (n)-[r]->(target)
+        WHERE target.iroko_uuid IS NOT NULL
+        WITH n, r, target
+        RETURN
+            n.iroko_uuid as uuid,
+            n.name as name,
+            labels(n) as labels,
+            properties(n) as all_props,
+            collect(CASE WHEN r IS NOT NULL THEN {
+                target_uuid: target.iroko_uuid,
+                type: type(r),
+                properties: properties(r)
+            } ELSE NULL END) as relationships
+        """
+        result = await self.mg.run(query, uuid=mg_uuid)
+        record = await result.single()
+        if not record:
+            return None
+        return self._record_to_row(record)
+
+    async def sync_single_from_memgraph(self, mg_uuid: str) -> Optional[Node]:
+        """Import a single node from Memgraph into the nodes table."""
+        row = await self._fetch_graph_node(mg_uuid)
+        if not row:
+            logger.warning(f"Node {mg_uuid} not found in Memgraph")
+            return None
+        return await self._upsert_node_row(row)
+
+    async def sync_from_memgraph(self, batch_size: int = 500, since: Optional[datetime] = None) -> dict:
+        """Bulk import nodes from Memgraph into PostgreSQL nodes table.
+
+        If ``since`` is provided, only nodes with ``_updated_at`` after that
+        time are imported (incremental sync).
+        """
+        if since:
+            logger.info(f"Starting incremental Memgraph -> PG sync (since {since.isoformat()})")
+            query = """
+            MATCH (n)
+            WHERE n.iroko_uuid IS NOT NULL
+              AND n.name IS NOT NULL
+              AND n._updated_at IS NOT NULL
+              AND n._updated_at >= $since
+            OPTIONAL MATCH (n)-[r]->(target)
+            WHERE target.iroko_uuid IS NOT NULL
+            WITH n, r, target
+            RETURN
+                n.iroko_uuid as uuid,
+                n.name as name,
+                labels(n) as labels,
+                properties(n) as all_props,
+                collect(CASE WHEN r IS NOT NULL THEN {
+                    target_uuid: target.iroko_uuid,
+                    type: type(r),
+                    properties: properties(r)
+                } ELSE NULL END) as relationships
+            """
+            result = await self.mg.run(query, since=since.isoformat())
+        else:
+            logger.info("Starting full Memgraph -> PG sync")
+            query = """
+            MATCH (n)
+            WHERE n.iroko_uuid IS NOT NULL AND n.name IS NOT NULL
+            OPTIONAL MATCH (n)-[r]->(target)
+            WHERE target.iroko_uuid IS NOT NULL
+            WITH n, r, target
+            RETURN
+                n.iroko_uuid as uuid,
+                n.name as name,
+                labels(n) as labels,
+                properties(n) as all_props,
+                collect(CASE WHEN r IS NOT NULL THEN {
+                    target_uuid: target.iroko_uuid,
+                    type: type(r),
+                    properties: properties(r)
+                } ELSE NULL END) as relationships
+            """
+            result = await self.mg.run(query)
+
+        processed = 0
+        upsert_batch = []
+
+        async for record in result:
+            try:
+                row = self._record_to_row(record)
+                if row:
+                    upsert_batch.append(row)
+                if len(upsert_batch) >= batch_size:
+                    await self._perform_batch_upsert(upsert_batch)
+                    processed += len(upsert_batch)
+                    upsert_batch = []
+                    logger.info(f"Imported {processed} nodes from Memgraph...")
+            except Exception as e:
+                logger.error(f"Error processing record: {e}")
+                continue
+
+        if upsert_batch:
+            await self._perform_batch_upsert(upsert_batch)
+            processed += len(upsert_batch)
+
+        return {"status": "success", "nodes_imported": processed}
+
+    def _record_to_row(self, record) -> Optional[dict]:
+        """Convert a Memgraph record to a nodes table row dict."""
+        try:
+            uid_str = record.get('uuid')
+            name = record.get('name')
+            if not uid_str or not name:
+                return None
+
+            labels = list(record.get('labels', []))
+            all_props = dict(record.get('all_props', {}))
+            rels_raw = list(record.get('relationships', []))
+
+            relationships = [r for r in rels_raw if r is not None]
+            data_payload = {k: v for k, v in all_props.items()
+                            if k not in ('iroko_uuid', 'name', '_updated_at')}
+
+            return {
+                "iroko_uuid": uuid.UUID(str(uid_str)),
+                "name": name,
+                "labels": labels,
+                "data": data_payload,
+                "relationships": relationships,
+            }
+        except Exception as e:
+            logger.error(f"Error converting record: {e}")
+            return None
+
+    async def _upsert_node_row(self, row: dict) -> Node:
+        """Upsert a single node row into PG and return the Node."""
+        stmt = pg_insert(Node).values(**row)
+        update_stmt = stmt.on_conflict_do_update(
+            index_elements=['iroko_uuid'],
+            set_={
+                "name": stmt.excluded.name,
+                "labels": stmt.excluded.labels,
+                "data": stmt.excluded.data,
+                "relationships": stmt.excluded.relationships,
+            }
+        )
+        await self.db.execute(update_stmt)
+        await self.db.commit()
+
+        result = await self.db.execute(
+            select(Node).where(Node.iroko_uuid == row["iroko_uuid"])
+        )
+        return result.scalar_one()
+
+    async def _perform_batch_upsert(self, rows: List[dict]):
+        if not rows:
+            return
+
+        stmt = pg_insert(Node).values(rows)
+        update_stmt = stmt.on_conflict_do_update(
+            index_elements=['iroko_uuid'],
+            set_={
+                "name": stmt.excluded.name,
+                "labels": stmt.excluded.labels,
+                "data": stmt.excluded.data,
+                "relationships": stmt.excluded.relationships,
+            }
+        )
+        await self.db.execute(update_stmt)
+        await self.db.commit()
+
+    # ------------------------------------------------------------------
+    # Sync status
+    # ------------------------------------------------------------------
+
+    async def get_sync_status(self) -> SyncStatus:
+        """Return counts from both stores for monitoring."""
+        pg_result = await self.db.execute(select(sqla_func.count(Node.iroko_uuid)))
+        pg_count = pg_result.scalar() or 0
+
+        pg_ts_result = await self.db.execute(
+            select(sqla_func.max(Node.updated_at))
+        )
+        pg_updated_at = pg_ts_result.scalar()
+
+        mg_result = await self.mg.run(
+            "MATCH (n:Node) RETURN count(n) as cnt, max(n._updated_at) as max_ts"
+        )
+        mg_record = await mg_result.single()
+        mg_count = mg_record["cnt"] if mg_record else 0
+        mg_updated_at_raw = mg_record["max_ts"] if mg_record else None
+        mg_updated_at: Optional[datetime] = None
+        if mg_updated_at_raw:
+            try:
+                mg_updated_at = datetime.fromisoformat(mg_updated_at_raw)
+            except (ValueError, TypeError):
+                mg_updated_at = None
+
+        return SyncStatus(
+            pg_node_count=pg_count,
+            graph_node_count=mg_count,
+            pg_updated_at=pg_updated_at,
+            graph_updated_at=mg_updated_at,
+        )
+
 
 class LegacySyncService:
     def __init__(self, db: AsyncSession, mg: Neo4jSession):
@@ -158,9 +417,6 @@ class LegacySyncService:
         self.mg = mg
 
     async def get_invalid_nodes(self, limit: int = 100) -> List[dict]:
-        """
-        Nodes missing iroko_uuid or name.
-        """
         query = """
         MATCH (n)
         WHERE n.iroko_uuid IS NULL OR n.name IS NULL
@@ -169,7 +425,7 @@ class LegacySyncService:
         """
         result = await self.mg.run(query, limit=limit)
         records = await result.data()
-        
+
         return [{
             "graph_id": r['id'],
             "labels": r['labels'],
@@ -177,24 +433,20 @@ class LegacySyncService:
         } for r in records]
 
     async def import_from_memgraph(self, batch_size: int = 1000) -> dict:
-        """
-        Hydrate PG from Memgraph. 
-        Now includes extracting labels(n) and storing them in the labels column.
-        """
-        # We fetch labels(n) in the query
+        logger.info("Starting Legacy Import with Labels...")
         query = """
         MATCH (n)
         WHERE n.iroko_uuid IS NOT NULL AND n.name IS NOT NULL
-        
+
         OPTIONAL MATCH (n)-[r]->(target)
         WHERE target.iroko_uuid IS NOT NULL
-        
+
         WITH n, r, target
-        
-        RETURN 
-            n.iroko_uuid as uuid, 
-            n.name as name, 
-            labels(n) as labels, 
+
+        RETURN
+            n.iroko_uuid as uuid,
+            n.name as name,
+            labels(n) as labels,
             properties(n) as all_props,
             collect(CASE WHEN r IS NOT NULL THEN {
                 target_uuid: target.iroko_uuid,
@@ -203,33 +455,29 @@ class LegacySyncService:
             } ELSE NULL END) as relationships
         """
 
-        logger.info("Starting Legacy Import with Labels...")
         result = await self.mg.run(query)
-        
+
         processed_count = 0
         upsert_batch = []
-        
+
         async for record in result:
             try:
                 uid_str = record['uuid']
                 name = record['name']
-                labels = record['labels'] # List of strings from Memgraph
-                all_props = record['all_props']
-                rels_raw = record['relationships']
+                labels = list(record['labels'])
+                all_props = dict(record['all_props'])
+                rels_raw = list(record['relationships'])
 
-                # Clean relationships
                 relationships = [r for r in rels_raw if r is not None]
-
-                # Data payload = props - (uuid, name). 
-                # Labels are stored in their own column, not in 'data'.
-                data_payload = {k: v for k, v in all_props.items() if k not in ['iroko_uuid', 'name']}
+                data_payload = {k: v for k, v in all_props.items()
+                                if k not in ('iroko_uuid', 'name', '_updated_at')}
 
                 row = {
                     "iroko_uuid": uuid.UUID(str(uid_str)),
                     "name": name,
-                    "labels": labels, # Save labels to Postgres
+                    "labels": labels,
                     "data": data_payload,
-                    "relationships": relationships
+                    "relationships": relationships,
                 }
                 upsert_batch.append(row)
 
@@ -254,16 +502,14 @@ class LegacySyncService:
             return
 
         stmt = pg_insert(Node).values(rows)
-        
         update_stmt = stmt.on_conflict_do_update(
             index_elements=['iroko_uuid'],
             set_={
                 "name": stmt.excluded.name,
-                "labels": stmt.excluded.labels, # Update labels if they changed
+                "labels": stmt.excluded.labels,
                 "data": stmt.excluded.data,
-                "relationships": stmt.excluded.relationships
+                "relationships": stmt.excluded.relationships,
             }
         )
-
         await self.db.execute(update_stmt)
         await self.db.commit()

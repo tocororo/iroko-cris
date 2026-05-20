@@ -7,8 +7,14 @@ from typing import Dict, List, Optional, Type
 from uuid import uuid4
 from datetime import datetime
 
+from sqlalchemy.ext.asyncio import AsyncSession as SQLAsyncSession
+from neo4j import AsyncSession as Neo4jSession
+
 from .schemas import CrawlerTaskConfig, TaskExecution, TaskStatus, CrawlerStats
 from .task import CrawlerTask
+from iroko.storage import neo4j_db
+from iroko.database import AsyncSessionLocal
+from iroko.nodes.service import NodeService
 
 logger = logging.getLogger('iroko-cris.tasks')
 
@@ -120,7 +126,7 @@ class CrawlerManager:
                     results = await task.execute(execution)
                     execution.status = TaskStatus.COMPLETED
                     execution.results = results
-                    
+
             except asyncio.TimeoutError:
                 print(traceback.format_exc())
                 logger.error(f"Task {task_id} timed out")
@@ -135,6 +141,26 @@ class CrawlerManager:
                 execution.completed_at = datetime.now()
                 if task_id in self.running_tasks:
                     del self.running_tasks[task_id]
+
+                # Post-write sync: import nodes modified by this task
+                # from Memgraph back into PostgreSQL
+                try:
+                    async with AsyncSessionLocal() as pg_session:
+                        mg_session = neo4j_db.get_session()
+                        try:
+                            service = NodeService(pg_session, mg_session)
+                            result = await service.sync_from_memgraph(
+                                since=execution.started_at
+                            )
+                            if result["nodes_imported"] > 0:
+                                logger.info(
+                                    f"Post-task sync imported {result['nodes_imported']} "
+                                    f"nodes for task {task_id}"
+                                )
+                        finally:
+                            await mg_session.close()
+                except Exception as sync_err:
+                    logger.error(f"Post-task PG sync failed for {task_id}: {sync_err}")
 
         # Start execution
         self.running_tasks[task_id] = asyncio.create_task(_execute_wrapper())

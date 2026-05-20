@@ -1,13 +1,14 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from neo4j import AsyncSession as Neo4jSession
-from typing import List
+from typing import List, Optional
 from uuid import UUID
+from datetime import datetime
 
 from iroko.database import get_db_session
 from iroko.storage import neo4j_db
 from iroko.auth.permissions import require_write, require_read
-from .schemas import NodeCreate, NodeUpdate, NodeResponse
+from .schemas import NodeCreate, NodeUpdate, NodeResponse, SyncStatus, SyncRequest
 from .service import NodeService, LegacySyncService
 
 router = APIRouter(prefix="/nodes", tags=["nodes"])
@@ -19,90 +20,132 @@ async def get_mg_session():
     finally:
         await session.close()
 
-# @router.post("/", response_model=NodeResponse, status_code=status.HTTP_201_CREATED)
-# async def create_node(
-#     node: NodeCreate,
-#     db: AsyncSession = Depends(get_db_session),
-#     mg: Neo4jSession = Depends(get_mg_session),
-#     _ = Depends(require_write)
-# ):
-#     service = NodeService(db, mg)
-#     try:
-#         return await service.create_node(node)
-#     except Exception as e:
-#         raise HTTPException(status_code=500, detail=f"Failed to create node: {str(e)}")
+@router.post("/", response_model=NodeResponse, status_code=status.HTTP_201_CREATED)
+async def create_node(
+    node: NodeCreate,
+    db: AsyncSession = Depends(get_db_session),
+    mg: Neo4jSession = Depends(get_mg_session),
+    _ = Depends(require_write)
+):
+    service = NodeService(db, mg)
+    try:
+        return await service.create_node(node)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to create node: {str(e)}")
 
-# @router.get("/search", response_model=List[NodeResponse])
-# async def search_nodes(
-#     q: str = Query(..., min_length=1),
-#     limit: int = 10,
-#     db: AsyncSession = Depends(get_db_session),
-#     mg: Neo4jSession = Depends(get_mg_session),
-#     _ = Depends(require_read)
-# ):
-#     service = NodeService(db, mg)
-#     return await service.search_nodes(q, limit)
+@router.get("/search", response_model=List[NodeResponse])
+async def search_nodes(
+    q: str = Query(..., min_length=1),
+    limit: int = 10,
+    db: AsyncSession = Depends(get_db_session),
+    mg: Neo4jSession = Depends(get_mg_session),
+    _ = Depends(require_read)
+):
+    service = NodeService(db, mg)
+    return await service.search_nodes(q, limit)
 
-# @router.get("/{node_id}", response_model=NodeResponse)
-# async def get_node(
-#     node_id: UUID,
-#     db: AsyncSession = Depends(get_db_session),
-#     mg: Neo4jSession = Depends(get_mg_session),
-#     _ = Depends(require_read)
-# ):
-#     service = NodeService(db, mg)
-#     node = await service.get_node(node_id)
-#     if not node:
-#         raise HTTPException(status_code=404, detail="Node not found")
-#     return node
+@router.get("/{node_id}", response_model=NodeResponse)
+async def get_node(
+    node_id: UUID,
+    db: AsyncSession = Depends(get_db_session),
+    mg: Neo4jSession = Depends(get_mg_session),
+    _ = Depends(require_read)
+):
+    service = NodeService(db, mg)
+    node = await service.get_node(node_id)
+    if not node:
+        raise HTTPException(status_code=404, detail="Node not found")
+    return node
 
-# @router.put("/{node_id}", response_model=NodeResponse)
-# async def update_node(
-#     node_id: UUID,
-#     node_in: NodeUpdate,
-#     db: AsyncSession = Depends(get_db_session),
-#     mg: Neo4jSession = Depends(get_mg_session),
-#     _ = Depends(require_write)
-# ):
-#     service = NodeService(db, mg)
-#     try:
-#         updated_node = await service.update_node(node_id, node_in)
-#     except Exception as e:
-#         raise HTTPException(status_code=500, detail=f"Failed to update node: {str(e)}")
-        
-#     if not updated_node:
-#         raise HTTPException(status_code=404, detail="Node not found")
-#     return updated_node
+@router.put("/{node_id}", response_model=NodeResponse)
+async def update_node(
+    node_id: UUID,
+    node_in: NodeUpdate,
+    db: AsyncSession = Depends(get_db_session),
+    mg: Neo4jSession = Depends(get_mg_session),
+    _ = Depends(require_write)
+):
+    service = NodeService(db, mg)
+    try:
+        updated_node = await service.update_node(node_id, node_in)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to update node: {str(e)}")
 
-# @router.delete("/{node_id}", status_code=status.HTTP_204_NO_CONTENT)
-# async def delete_node(
-#     node_id: UUID,
-#     db: AsyncSession = Depends(get_db_session),
-#     mg: Neo4jSession = Depends(get_mg_session),
-#     _ = Depends(require_write)
-# ):
-#     service = NodeService(db, mg)
-#     success = await service.delete_node(node_id)
-#     if not success:
-#         raise HTTPException(status_code=404, detail="Node not found")
+    if not updated_node:
+        raise HTTPException(status_code=404, detail="Node not found")
+    return updated_node
 
-# @router.get("/admin/invalid-nodes", dependencies=[Depends(require_write)])
-# async def check_invalid_legacy_nodes(
-#     limit: int = 100,
-#     mg: Neo4jSession = Depends(get_mg_session),
-#     db: AsyncSession = Depends(get_db_session) 
-# ):
-#     service = LegacySyncService(db, mg)
-#     return await service.get_invalid_nodes(limit)
+@router.delete("/{node_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_node(
+    node_id: UUID,
+    db: AsyncSession = Depends(get_db_session),
+    mg: Neo4jSession = Depends(get_mg_session),
+    _ = Depends(require_write)
+):
+    service = NodeService(db, mg)
+    success = await service.delete_node(node_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Node not found")
 
-# @router.post("/admin/import-legacy", dependencies=[Depends(require_write)])
-# async def import_legacy_graph(
-#     db: AsyncSession = Depends(get_db_session),
-#     mg: Neo4jSession = Depends(get_mg_session),
-# ):
-#     service = LegacySyncService(db, mg)
-#     try:
-#         result = await service.import_from_memgraph()
-#         return result
-#     except Exception as e:
-#         raise HTTPException(status_code=500, detail=f"Import failed: {str(e)}")
+# --- Sync endpoints ---
+
+@router.post("/sync/to-graph", dependencies=[Depends(require_write)])
+async def sync_to_graph(
+    req: SyncRequest = None,
+    db: AsyncSession = Depends(get_db_session),
+    mg: Neo4jSession = Depends(get_mg_session),
+):
+    """Reconstruct Memgraph from the nodes table (PG -> MG)."""
+    service = NodeService(db, mg)
+    batch = req.batch_size if req else 500
+    try:
+        return await service.sync_all_to_memgraph(batch_size=batch)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Sync failed: {str(e)}")
+
+@router.post("/sync/from-graph", dependencies=[Depends(require_write)])
+async def sync_from_graph(
+    req: SyncRequest = None,
+    db: AsyncSession = Depends(get_db_session),
+    mg: Neo4jSession = Depends(get_mg_session),
+):
+    """Import nodes from Memgraph into the nodes table (MG -> PG)."""
+    service = NodeService(db, mg)
+    batch = req.batch_size if req else 500
+    since = req.since if req else None
+    try:
+        return await service.sync_from_memgraph(batch_size=batch, since=since)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Sync failed: {str(e)}")
+
+@router.get("/sync/status", response_model=SyncStatus)
+async def sync_status(
+    db: AsyncSession = Depends(get_db_session),
+    mg: Neo4jSession = Depends(get_mg_session),
+):
+    """Show node counts and last update timestamps from both stores."""
+    service = NodeService(db, mg)
+    return await service.get_sync_status()
+
+# --- Admin endpoints ---
+
+@router.get("/admin/invalid-nodes", dependencies=[Depends(require_write)])
+async def check_invalid_legacy_nodes(
+    limit: int = 100,
+    mg: Neo4jSession = Depends(get_mg_session),
+    db: AsyncSession = Depends(get_db_session)
+):
+    service = LegacySyncService(db, mg)
+    return await service.get_invalid_nodes(limit)
+
+@router.post("/admin/import-legacy", dependencies=[Depends(require_write)])
+async def import_legacy_graph(
+    db: AsyncSession = Depends(get_db_session),
+    mg: Neo4jSession = Depends(get_mg_session),
+):
+    service = LegacySyncService(db, mg)
+    try:
+        result = await service.import_from_memgraph()
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Import failed: {str(e)}")
