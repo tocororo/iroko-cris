@@ -120,6 +120,7 @@ async def init_db():
             # Import all models to ensure they are registered
             from iroko.auth import models as auth_models
             from iroko.evals import models as evals_models
+            from iroko.nodes import models as node_models
             # Future: Import other module models here
             
             await conn.run_sync(Base.metadata.create_all)

@@ -183,19 +183,19 @@ if __name__ == "__main__":
     #     ), "RemoveNotUsedPublications")
     # )
     
-    # crawler_manager.register_task_type("OrcidMappingTask", OrcidMappingTask)
-    # asyncio.run(
-    #     add_execute(CrawlerTaskConfig(
-    #         task_id="orcid_mapping_task",
-    #         name="Orcid Mapping processing tasks",
-    #         config={
-    #             'input_folder': '.data-init/cuban_researchers',
-    #             'output_folder': '.data-init/cuban_researchers_out',
-    #             'diune_path':'.data-init/orgs-onei-duine-septiembre-2025-fix.xlsx',
-    #             'person_schema_path': 'docs/schema/person-v1.0.0.json'
-    #         },
-    #     ), "OrcidMappingTask")
-    # )
+    crawler_manager.register_task_type("OrcidMappingTask", OrcidMappingTask)
+    asyncio.run(
+        add_execute(CrawlerTaskConfig(
+            task_id="orcid_mapping_task",
+            name="Orcid Mapping processing tasks",
+            config={
+                'input_folder': '.data/orcid/cuban_researchers',
+                'output_folder': '.data/orcid/cuban_researchers_out',
+                'diune_path':'.data-init/orgs-onei-duine-septiembre-2025-fix.xlsx',
+                'person_schema_path': 'docs/schema/person-v1.0.0.json'
+            },
+        ), "OrcidMappingTask")
+    )
 
 
         

@@ -1245,7 +1245,7 @@ class OrcidMappingTask(CrawlerTask):
             # )
 
             self.logger.info("Starting ORCID mapping step...")
-            await self._step1_mapping()
+            # await self._step1_mapping()
 
             self.logger.info("Starting Neo4j ingestion step...")
             await self._step2_ingest()
@@ -1603,10 +1603,10 @@ class OrcidMappingTask(CrawlerTask):
 
     async def _find_organization_by_name(self, session, org_name, normalized_name):
         """Find organization by name in Neo4j."""
+        # OR apoc.text.clean(o.name) = $normalized_name
         query = """
         MATCH (o:Organization)
         WHERE o.name = $org_name 
-        OR apoc.text.clean(o.name) = $normalized_name
         RETURN o.iroko_uuid as iroko_uuid, o.name as name
         LIMIT 1
         """

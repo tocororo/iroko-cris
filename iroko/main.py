@@ -6,6 +6,8 @@ from iroko.auth.router import router as auth_router
 from iroko.auth.init import initialize_auth_system
 from iroko.evals.router import router as evals_router
 from iroko.tasks.router import router as crawler_router
+from iroko.nodes.router import router as nodes_router
+
 from iroko.tasks.manager import crawler_manager
 from iroko.evals.service import eval_service
 from iroko.config import app_settings
@@ -115,7 +117,7 @@ app.include_router(cypher.router, prefix="/v1")
 app.include_router(auth_router, prefix="/v1")
 app.include_router(evals_router, prefix="/v1")
 app.include_router(crawler_router, prefix="/v1")
-
+app.include_router(nodes_router, prefix="/v1")
 
 # Add CORS preflight handler for all routes
 @app.options("/{rest_of_path:path}")
