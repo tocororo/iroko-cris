@@ -7,7 +7,11 @@ from typing import Dict, Any
 import httpx
 from lxml import html 
 
+from uuid import UUID
+
 from iroko.storage import neo4j_db
+from iroko.database import AsyncSessionLocal
+from iroko.nodes.service import NodeService
 from iroko.tasks.schemas import TaskExecution
 from iroko.tasks.task import CrawlerTask
 from random import randint
@@ -49,7 +53,13 @@ class ScieloProcessingTask(CrawlerTask):
             }
 
         # Process journals and create relationships
-        await self._process_journals_to_neo4j(all_journals, data)
+        async with AsyncSessionLocal() as pg_session:
+            mg_session = neo4j_db.get_session()
+            try:
+                service = NodeService(pg_session, mg_session)
+                await self._process_journals_to_neo4j(all_journals, data, service)
+            finally:
+                await mg_session.close()
         
         # Save output
         await self._save_output(data)
@@ -113,22 +123,22 @@ class ScieloProcessingTask(CrawlerTask):
             "numbers": numbers
         }
 
-    async def _process_journals_to_neo4j(self, all_journals: list, data: dict):
+    async def _process_journals_to_neo4j(self, all_journals: list, data: dict, service: NodeService):
         """Process journals and create IN_INDEX relationships in Neo4j."""
-        session = neo4j_db.get_session()
+        session = service.mg
         processed_count = 0
         error_count = 0
 
         try:
             # Find or create Scielo Index node
-            scielo_index_id = await self._get_or_create_scielo_index(session)
-            if not scielo_index_id:
+            scielo_index_uuid = await self._get_or_create_scielo_index(session, service)
+            if not scielo_index_uuid:
                 self.logger.error("Failed to get or create Scielo index node")
                 return
 
             for journal_info in all_journals:
                 try:
-                    success = await self._process_single_journal(session, journal_info, scielo_index_id, data)
+                    success = await self._process_single_journal(session, service, journal_info, scielo_index_uuid, data)
                     if success:
                         processed_count += 1
                     else:
@@ -143,35 +153,29 @@ class ScieloProcessingTask(CrawlerTask):
         except Exception as e:
             self.logger.error(f"Error in journal processing: {e}")
             print(traceback.format_exc())
-        finally:
-            await session.close()
 
-    async def _get_or_create_scielo_index(self, session) -> str:
-        """Get or create the Scielo index node."""
-        # Try to find existing Scielo Index
-        query_find = "MATCH (i:Index {name: 'Scielo'}) RETURN i.name as name"
+    async def _get_or_create_scielo_index(self, session, service: NodeService) -> Optional[str]:
+        """Get or create the Scielo index node. Returns iroko_uuid."""
+        query_find = """
+        MATCH (i:Index {name: 'Scielo'})
+        RETURN i.iroko_uuid as uuid
+        """
         result = await session.run(query_find)
         record = await result.single()
         
         if record:
             self.logger.info("Found existing Scielo Index node")
-            return "Scielo"  # Using name as identifier
+            return record["uuid"]
         
-        # Create new Scielo Index node
-        query_create = """
-        CREATE (i:Index {name: 'Scielo', vocabulary: 'INDEXES' , source: 'Scielo Cuba'})
-        RETURN i.name as name
-        """
-        result = await session.run(query_create)
-        record = await result.single()
-        
-        if record:
-            self.logger.info("Created new Scielo Index node")
-            return record["name"]
-        
-        return None
+        node = await service.merge_node(
+            name='Scielo',
+            labels=['Index', 'Term'],
+            data={'vocabulary': 'INDEXES', 'source': 'Scielo Cuba'}
+        )
+        self.logger.info("Created new Scielo Index node via NodeService")
+        return str(node.iroko_uuid)
 
-    async def _process_single_journal(self, session, journal_info: dict, index_id: str, data: dict) -> bool:
+    async def _process_single_journal(self, session, service: NodeService, journal_info: dict, scielo_index_uuid: str, data: dict) -> bool:
         """Process a single journal and create IN_INDEX relationship."""
         link = journal_info["link"]
         match = re.search(r'[?&]pid=([^&#]*)', link)
@@ -184,25 +188,24 @@ class ScieloProcessingTask(CrawlerTask):
 
         journal_info["issn"] = found_issn
 
-        # Find publication by ISSN
-        publication = await self._find_publication_by_issn(session, found_issn)
-        if not publication:
-            # Try to find by title
-            publication = await self._find_publication_by_title(session, journal_info["title"])
+        # Find publication by ISSN (returns iroko_uuid)
+        pub_uuid = await self._find_publication_by_issn(session, found_issn)
+        if not pub_uuid:
+            pub_uuid = await self._find_publication_by_title(session, journal_info["title"])
         
-        if not publication:
+        if not pub_uuid:
             self.logger.warning(f"Publication with ISSN {found_issn} (from {journal_info['title']}) not found in Neo4j database.")
             return False
 
         # Create or update IN_INDEX relationship
         success = await self._create_or_update_relationship(
-            session, publication, index_id, journal_info
+            service, pub_uuid, scielo_index_uuid, journal_info
         )
         
         return success
 
-    async def _find_publication_by_issn(self, session, issn: str) -> dict:
-        """Find publication by any ISSN type."""
+    async def _find_publication_by_issn(self, session, issn: str) -> Optional[str]:
+        """Find publication by any ISSN type. Returns iroko_uuid or None."""
         query = """
         MATCH (p:Publication) 
         WHERE p.`identifier#issn_p` = $issn OR 
@@ -210,65 +213,38 @@ class ScieloProcessingTask(CrawlerTask):
               p.`identifier#issn_l` = $issn OR 
               p.`identifier#issn_o` = $issn OR 
               p.`identifier#issn_c` = $issn 
-        RETURN p.name as name, p.`identifier#issn_l` as issn_l
+        RETURN p.iroko_uuid as uuid
         LIMIT 1
         """
         result = await session.run(query, issn=issn)
         record = await result.single()
-        return record if record else None
+        return record["uuid"] if record else None
 
-    async def _find_publication_by_title(self, session, title: str) -> dict:
-        """Find publication by title (fuzzy matching)."""
+    async def _find_publication_by_title(self, session, title: str) -> Optional[str]:
+        """Find publication by title (fuzzy matching). Returns iroko_uuid or None."""
         query = """
         MATCH (p:Publication) 
         WHERE toLower(p.name) CONTAINS toLower($title)
-        RETURN p.name as name, p.`identifier#issn_l` as issn_l
+        RETURN p.iroko_uuid as uuid
         LIMIT 1
         """
         result = await session.run(query, title=title)
         record = await result.single()
-        return record if record else None
+        return record["uuid"] if record else None
 
-    async def _create_or_update_relationship(self, session, publication: dict, index_id: str, journal_info: dict) -> bool:
-        """Create or update IN_INDEX relationship."""
-        # Check if relationship already exists
-        query_check = """
-        MATCH (p:Publication {name: $pub_name})-[r:IN_INDEX]->(i:Index {name: $index_name})
-        RETURN r
-        """
-        result = await session.run(query_check, pub_name=publication["name"], index_name=index_id)
-        existing_rel = await result.single()
-
-        if existing_rel:
-            # Update existing relationship
-            query_update = """
-            MATCH (p:Publication {name: $pub_name})-[r:IN_INDEX]->(i:Index {name: $index_name})
-            SET r.source = $source, r.numbers = $numbers, r.date = $date,
-                r.updated_at = timestamp()
-            """
-            await session.run(query_update, 
-                            pub_name=publication["name"],
-                            index_name=index_id,
-                            source="Scielo", 
-                            numbers=journal_info.get("numbers"), 
-                            date=journal_info.get("date"))
-            self.logger.debug(f"Updated IN_INDEX relationship for {journal_info['title']}")
-        else:
-            # Create new relationship
-            query_create = """
-            MATCH (p:Publication {name: $pub_name})
-            MATCH (i:Index {name: $index_name})
-            CREATE (p)-[r:IN_INDEX {source: $source, numbers: $numbers, date: $date, created_at: timestamp()}]->(i)
-            """
-            await session.run(query_create,
-                            pub_name=publication["name"],
-                            index_name=index_id,
-                            source="Scielo",
-                            numbers=journal_info.get("numbers"),
-                            date=journal_info.get("date"))
-            self.logger.debug(f"Created IN_INDEX relationship for {journal_info['title']}")
-
+    async def _create_or_update_relationship(self, service: NodeService, pub_uuid: str, index_uuid: str, journal_info: dict) -> bool:
+        """Create or update IN_INDEX relationship using NodeService."""
+        from_uuid = UUID(pub_uuid)
+        to_uuid = UUID(index_uuid)
+        props = {
+            "source": "Scielo",
+            "numbers": journal_info.get("numbers"),
+            "date": journal_info.get("date"),
+        }
+        await service.merge_relationship(from_uuid, to_uuid, "IN_INDEX", props)
+        self.logger.debug(f"Merged IN_INDEX relationship for {journal_info['title']}")
         return True
+        # Note: merge_relationship handles both create and update.
 
     async def _save_output(self, data: dict):
         """Save output data to JSON file."""

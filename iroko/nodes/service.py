@@ -73,14 +73,14 @@ class NodeService:
                     """
                     await self.mg.run(prop_query, data_params)
 
-            # 4. Sync Relationships (reset approach)
-            delete_rels_query = """
-            MATCH (n:Node {iroko_uuid: $uuid})-[r]->()
-            DELETE r
-            """
-            await self.mg.run(delete_rels_query, uuid=node_uuid)
-
+            # 4. Sync Relationships (reset approach) — only when non-empty
             if node.relationships:
+                delete_rels_query = """
+                MATCH (n:Node {iroko_uuid: $uuid})-[r]->()
+                DELETE r
+                """
+                await self.mg.run(delete_rels_query, uuid=node_uuid)
+
                 for rel in node.relationships:
                     if not isinstance(rel, dict):
                         rel = rel.model_dump()
@@ -379,6 +379,166 @@ class NodeService:
     # ------------------------------------------------------------------
     # Sync status
     # ------------------------------------------------------------------
+
+    # ------------------------------------------------------------------
+    # Write methods: atomic PG + MG operations
+    # ------------------------------------------------------------------
+
+    async def merge_node(
+        self,
+        iroko_uuid: Optional[UUID] = None,
+        name: Optional[str] = None,
+        labels: Optional[List[str]] = None,
+        data: Optional[Dict[str, Any]] = None,
+        relationships: Optional[List[Dict[str, Any]]] = None,
+    ) -> Node:
+        """Upsert a node in PG and sync to MG. Generates UUID if not provided.
+
+        If iroko_uuid is provided and the node exists in MG, the provided
+        ``data`` dict is merged with the existing MG properties so that
+        PG always holds the complete property set.
+        """
+        if iroko_uuid and data is not None:
+            result = await self.mg.run(
+                "MATCH (n {iroko_uuid: $uuid}) RETURN properties(n) as props",
+                uuid=str(iroko_uuid))
+            rec = await result.single()
+            if rec:
+                existing = dict(rec["props"])
+                for k in list(existing.keys()):
+                    if k.startswith('_'):
+                        del existing[k]
+                merged = existing.copy()
+                merged.update(data)
+                data = merged
+
+        row = {
+            "iroko_uuid": iroko_uuid or uuid.uuid4(),
+            "name": name or "",
+            "labels": labels or [],
+            "data": data or {},
+            "relationships": relationships or [],
+        }
+        node = await self._upsert_node_row(row)
+        await self._sync_to_memgraph(node)
+        return node
+
+    async def set_node_properties(
+        self,
+        iroko_uuid: UUID,
+        properties: Dict[str, Any],
+    ) -> Optional[Node]:
+        """Merge properties into a node's data JSON and sync to MG."""
+        result = await self.db.execute(select(Node).where(Node.iroko_uuid == iroko_uuid))
+        node = result.scalar_one_or_none()
+        if not node:
+            return None
+
+        current_data = dict(node.data) if node.data else {}
+        current_data.update(properties)
+        node.data = current_data
+        await self.db.commit()
+        await self.db.refresh(node)
+
+        await self._sync_to_memgraph(node)
+        return node
+
+    async def merge_relationship(
+        self,
+        from_uuid: UUID,
+        to_uuid: UUID,
+        rel_type: str,
+        properties: Optional[Dict[str, Any]] = None,
+    ) -> tuple[Optional[Node], Optional[Node]]:
+        from_node = await self.get_node(from_uuid)
+        to_node = await self.get_node(to_uuid)
+        if not from_node or not to_node:
+            raise ValueError(f"Cannot find nodes: from={from_uuid} to={to_uuid}")
+
+        rel_item = {
+            "target_uuid": str(to_uuid),
+            "type": rel_type,
+            "properties": properties or {},
+        }
+        current_rels = list(from_node.relationships) if from_node.relationships else []
+        existing_idx = None
+        for i, rel in enumerate(current_rels):
+            d = rel if isinstance(rel, dict) else rel.model_dump() if hasattr(rel, 'model_dump') else {}
+            if d.get("target_uuid") == str(to_uuid) and d.get("type") == rel_type:
+                existing_idx = i
+                break
+        if existing_idx is not None:
+            current_rels[existing_idx] = rel_item
+        else:
+            current_rels.append(rel_item)
+
+        from_node.relationships = current_rels
+        await self.db.commit()
+        await self.db.refresh(from_node)
+
+        mg_query = f"""
+        MATCH (source:Node {{iroko_uuid: $from_uuid}})
+        MATCH (target:Node {{iroko_uuid: $to_uuid}})
+        MERGE (source)-[r:{rel_type}]->(target)
+        SET r += $props
+        """
+        await self.mg.run(mg_query, from_uuid=str(from_uuid), to_uuid=str(to_uuid), props=properties or {})
+        return from_node, to_node
+
+    async def delete_relationship(
+        self,
+        from_uuid: UUID,
+        to_uuid: UUID,
+        rel_type: str,
+    ) -> Optional[Node]:
+        from_node = await self.get_node(from_uuid)
+        if not from_node:
+            return None
+
+        current_rels = list(from_node.relationships) if from_node.relationships else []
+        from_node.relationships = [
+            rel for rel in current_rels
+            if not (
+                (rel.get("target_uuid") if isinstance(rel, dict) else str(rel.target_uuid)) == str(to_uuid)
+                and (rel.get("type") if isinstance(rel, dict) else rel.type) == rel_type
+            )
+        ]
+        await self.db.commit()
+        await self.db.refresh(from_node)
+
+        mg_query = """
+        MATCH (source:Node {iroko_uuid: $from_uuid})-[r]->(target:Node {iroko_uuid: $to_uuid})
+        WHERE type(r) = $rel_type
+        DELETE r
+        """
+        await self.mg.run(mg_query, from_uuid=str(from_uuid), to_uuid=str(to_uuid), rel_type=rel_type)
+        return from_node
+
+    async def bulk_merge_nodes(
+        self,
+        nodes: List[Dict[str, Any]],
+        batch_size: int = 500,
+    ) -> dict:
+        """Batch upsert nodes in PG and sync each to MG."""
+        total = len(nodes)
+        synced = 0
+        for i in range(0, total, batch_size):
+            batch = nodes[i:i + batch_size]
+            pg_rows = []
+            for nd in batch:
+                pg_rows.append({
+                    "iroko_uuid": nd.get("iroko_uuid", uuid.uuid4()),
+                    "name": nd.get("name", ""),
+                    "labels": nd.get("labels", []),
+                    "data": nd.get("data", {}),
+                    "relationships": nd.get("relationships", []),
+                })
+            await self._perform_batch_upsert(pg_rows)
+            for row in pg_rows:
+                node = Node(**row)
+                await self._sync_to_memgraph(node)
+                synced += 1
+        return {"status": "success", "nodes_synced": synced}
 
     async def get_sync_status(self) -> SyncStatus:
         """Return counts from both stores for monitoring."""

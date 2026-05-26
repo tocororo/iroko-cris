@@ -7,7 +7,11 @@ import asyncio
 import logging
 from urllib.parse import urljoin
 
+from uuid import UUID
+
 from iroko.storage import neo4j_db
+from iroko.database import AsyncSessionLocal
+from iroko.nodes.service import NodeService
 
 import httpx
 from lxml import html
@@ -22,76 +26,46 @@ logger = logging.getLogger('iroko-cris.tasks')
 
 
 class FixMiarIndexs(CrawlerTask):
-    """Abstract base class for all crawler tasks"""
 
     async def execute(self, execution: TaskExecution) -> Dict[str, Any]:
-        """
-        Execute the crawler task
-        
-        Args:
-            execution: Task execution record for tracking progress
-            
-        Returns:
-            Dictionary with execution results
-        """
         execution.execution_log.append("load data")
         session = neo4j_db.get_session()
-        data_file = self.config.get("data_file")        
-        
-        with open(data_file, 'r') as f:
-            data = json.load(f)
-        
-        try:
-            # Process the data to extract all database entries with their URLs
-            db_entries = []
-            for group in data:
-                db_entries.append({
-                        "name": group["name"],
-                        "url": group["url"]
-                    })
-                for db in group.get("dbs", []):
-                    db_entries.append({
-                        "name": db["name"],
-                        "url": db["url"]
-                    })
+        async with AsyncSessionLocal() as pg_session:
+            service = NodeService(pg_session, session)
+            data_file = self.config.get("data_file")        
             
-            # Update Neo4j nodes in batches
-            batch_size = 100
-            total_updated = 0
-            execution.execution_log.append("build query")
-            for i in range(0, len(db_entries), batch_size):
-                batch = db_entries[i:i + batch_size]
+            with open(data_file, 'r') as f:
+                data = json.load(f)
+            
+            try:
+                db_entries = []
+                for group in data:
+                    db_entries.append({"name": group["name"], "url": group["url"]})
+                    for db in group.get("dbs", []):
+                        db_entries.append({"name": db["name"], "url": db["url"]})
                 
-                # Create Cypher query to match nodes by exact name and set URL
-                query = """
-                UNWIND $batch AS item
-                MATCH (n:Index)
-                WHERE n.name = item.name
-                SET n.`identifier#url` = item.url
-                RETURN count(n) as updated_count
-                """
-                
-                result = await session.run(query, batch=batch)
-                record = await result.single()
-                if record:
-                    total_updated += record["updated_count"]
-            execution.execution_log.append(f"""
-                "status": "success",
-                "total_updated": {total_updated},
-                "total_processed": {len(db_entries)}""")
+                total_updated = 0
+                execution.execution_log.append("build query")
+                for entry in db_entries:
+                    result = await session.run(
+                        "MATCH (n:Index {name: $name}) RETURN n.iroko_uuid as uuid LIMIT 1",
+                        name=entry["name"]
+                    )
+                    record = await result.single()
+                    if record and record.get("uuid"):
+                        await service.set_node_properties(UUID(record["uuid"]), {"identifier#url": entry["url"]})
+                        total_updated += 1
 
-        except Exception as e:
-            return {
-                "status": "error",
-                "error": str(e)
-            }
-        finally:
-            await session.close()
-            return {
-                "status": "success",
-                "total_updated": total_updated,
-                "total_processed": len(db_entries)
-            }
+                execution.execution_log.append(f"""
+                    "status": "success",
+                    "total_updated": {total_updated},
+                    "total_processed": {len(db_entries)}""")
+
+            except Exception as e:
+                return {"status": "error", "error": str(e)}
+            finally:
+                await session.close()
+                return {"status": "success", "total_updated": total_updated, "total_processed": len(db_entries)}
 
     def validate_config(self) -> bool:
         """
@@ -206,9 +180,9 @@ class ColectMiarIndexes(CrawlerTask):
         self.logger.info(f"Extracted {len(databases)} databases from {url}")
         return databases
 
-    async def extract_and_add_databases_to_neo4j(self, session, client, url, group_name):
+    async def extract_and_add_databases_to_neo4j(self, session, service, client, url, group_name):
         """
-        Extract database names and URLs from MIAR database page and add/update nodes in Neo4j
+        Extract database names and URLs from MIAR database page and add/update nodes via NodeService
         """
         databases = []
         if "input" in self.config:
@@ -225,74 +199,56 @@ class ColectMiarIndexes(CrawlerTask):
             logger.info(f'sleep {sleep_time}')
             await asyncio.sleep(sleep_time)
 
-        
-        # Process the databases in Neo4j
+        # Get group node uuid
+        g_result = await session.run(
+            "MATCH (g:Index {`identifier#url`: $group_url}) RETURN g.iroko_uuid as uuid",
+            group_url=url
+        )
+        g_record = await g_result.single()
+        if not g_record or not g_record.get("uuid"):
+            logger.warning(f"Group Index node not found for URL: {url}")
+            return databases
+        group_uuid = UUID(g_record["uuid"])
+
         for db in databases:
-            # Cypher query to merge the database node and create the relationship
-            query = """
-            MERGE (i:Index {`identifier#url`: $db_url})
-            SET i.name = $db_name, i.vocabulary = 'INDEXES'
-            SET i:Term
-            WITH i
-            MATCH (g:Index {`identifier#url`: $group_url})
-            MERGE (i)-[:IN_GROUP]->(g)
-            """
-            
-            await session.run(query, {
-                "group_url": url,
-                "db_name": db["name"],
-                "db_url": db["url"]
-            })
+            node = await service.merge_node(
+                name=db["name"],
+                labels=['Index', 'Term'],
+                data={'identifier#url': db["url"], 'vocabulary': 'INDEXES'}
+            )
+            await service.merge_relationship(node.iroko_uuid, group_uuid, "IN_GROUP")
 
         return databases
 
     async def execute(self, execution: TaskExecution) -> Dict[str, Any]:
-        """
-        Execute the crawler task
-        
-        Args:
-            execution: Task execution record for tracking progress
-            
-        Returns:
-            Dictionary with execution results
-        """
         execution.execution_log.append("load data")
         session = neo4j_db.get_session()
-        async with httpx.AsyncClient(
-            headers=http_task_headers,
-            timeout=30.0
-        ) as client:
-            try:
-                # Define the group URLs and names
-                groups = {
-                    "Citation databases": "https://miar.ub.edu/databases/GRUPO/G",
-                    "Multidisciplinary databases": "https://miar.ub.edu/databases/GRUPO/S", 
-                    "Specialized databases": "https://miar.ub.edu/databases/GRUPO/E",
-                    "Evaluation resources": "https://miar.ub.edu/databases/GRUPO/M"
-                }
-                
-                all_databases = {}
-                for group_name, group_url in groups.items():
-                    print(f"Processing {group_name}...")
-                    databases = await self.extract_and_add_databases_to_neo4j(session, client, group_url, group_name)
-                    all_databases[group_name] = databases
-                    print(f"Found {len(databases)} databases in {group_name}")
+        async with AsyncSessionLocal() as pg_session:
+            service = NodeService(pg_session, session)
+            async with httpx.AsyncClient(headers=http_task_headers, timeout=30.0) as client:
+                try:
+                    groups = {
+                        "Citation databases": "https://miar.ub.edu/databases/GRUPO/G",
+                        "Multidisciplinary databases": "https://miar.ub.edu/databases/GRUPO/S", 
+                        "Specialized databases": "https://miar.ub.edu/databases/GRUPO/E",
+                        "Evaluation resources": "https://miar.ub.edu/databases/GRUPO/M"
+                    }
+                    
+                    all_databases = {}
+                    for group_name, group_url in groups.items():
+                        print(f"Processing {group_name}...")
+                        databases = await self.extract_and_add_databases_to_neo4j(session, service, client, group_url, group_name)
+                        all_databases[group_name] = databases
+                        print(f"Found {len(databases)} databases in {group_name}")
 
-                with open(self.config["output"], "w", encoding="utf-8") as f:
-                    json.dump(all_databases, f, ensure_ascii=False, indent=2)
-            except Exception as e:
-                print(traceback.format_exc())
-                return {
-                    "status": "error",
-                    "error": str(e)
-                }
-            finally:
-                await session.close()
-        return {
-                "status": "success",
-                "miar_databases": all_databases,
-                "total_processed": len(all_databases)
-            }
+                    with open(self.config["output"], "w", encoding="utf-8") as f:
+                        json.dump(all_databases, f, ensure_ascii=False, indent=2)
+                except Exception as e:
+                    print(traceback.format_exc())
+                    return {"status": "error", "error": str(e)}
+                finally:
+                    await session.close()
+            return {"status": "success", "miar_databases": all_databases, "total_processed": len(all_databases)}
 
     def validate_config(self) -> bool:
         """
@@ -507,12 +463,8 @@ class MiarJournalsProcessingTask(CrawlerTask):
             raise ValueError("Config must contain 'output_json_path' and 'input_json_path'.")
 
     async def execute(self, execution: TaskExecution) -> Dict[str, Any]:
-        """
-        Execute the MIAR data processing task.
-        """
         self.logger.info(f"Starting MIAR data processing task {self.task_id}")
 
-        # Read input JSON data
         try:
             with open(self.input_path, 'r', encoding='utf-8') as f:
                 data = json.load(f)
@@ -530,167 +482,103 @@ class MiarJournalsProcessingTask(CrawlerTask):
         journals = data.get("journals", [])
         self.logger.info(f"Processing {len(journals)} journals from input data.")
 
-        # Initialize output structure
         output_results = {
-            "issn": [],
-            "name": [],
-            "new": [],
-            "index_not_found": [],
-            "old_index": []
+            "issn": [], "name": [], "new": [],
+            "index_not_found": [], "old_index": []
         }
 
-        # Get Neo4j session
         session = neo4j_db.get_session()
-        
-        try:
-            # --- Step 1: Process Journals ---
-            for journal in journals:
-                issn = journal.get("issn")
-                title = journal.get("title")
-                url = journal.get("url")
-                pub_node_id = None  # To store the ID of the found/created Publication node
+        async with AsyncSessionLocal() as pg_session:
+            service = NodeService(pg_session, session)
+            try:
+                for journal in journals:
+                    issn = journal.get("issn")
+                    title = journal.get("title")
+                    url = journal.get("url")
+                    pub_uuid = None
 
-                if not issn:
-                    self.logger.warning(f"Journal missing ISSN, skipping: {title}")
-                    continue
+                    if not issn:
+                        self.logger.warning(f"Journal missing ISSN, skipping: {title}")
+                        continue
 
-                # Query 1: Find by ISSN
-                query_find_by_issn = (
-                    "MATCH (p:Publication) WHERE "
-                    "p.`identifier#issn_p` = $issn OR "
-                    "p.`identifier#issn_e` = $issn OR "
-                    "p.`identifier#issn_l` = $issn OR "
-                    "p.`identifier#issn_o` = $issn OR "
-                    "p.`identifier#issn_c` = $issn "
-                    "RETURN id(p) as node_id"  # Use id() function instead of _id
-                )
-                result_issn = await session.run(query_find_by_issn, issn=issn)
-                pub_record = await result_issn.single()
-
-                if pub_record:
-                    self.logger.debug(f"Found journal {title} by ISSN {issn}.")
-                    output_results["issn"].append(issn)
-                    pub_node_id = pub_record["node_id"]  # Store node ID for later use
-                else:
-                    # Query 2: Find by Name/Title
-                    query_find_by_name = (
-                        "MATCH (p:Publication) WHERE p.name = $title RETURN id(p) as node_id"
-                    )
-                    result_name = await session.run(query_find_by_name, title=title)
-                    pub_record = await result_name.single()
-
-                    if pub_record:
-                        self.logger.debug(f"Found journal {issn} by name {title}.")
-                        output_results["name"].append(issn)
-                        pub_node_id = pub_record["node_id"]
+                    # Find by ISSN
+                    r1 = await session.run(
+                        "MATCH (p:Publication) WHERE "
+                        "p.`identifier#issn_p` = $issn OR p.`identifier#issn_e` = $issn OR "
+                        "p.`identifier#issn_l` = $issn OR p.`identifier#issn_o` = $issn OR "
+                        "p.`identifier#issn_c` = $issn "
+                        "RETURN p.iroko_uuid as uuid", issn=issn)
+                    record = await r1.single()
+                    if record:
+                        output_results["issn"].append(issn)
+                        pub_uuid = record["uuid"]
                     else:
-                        # Query 3: Create new Publication node
-                        query_create_pub = (
-                            "CREATE (p:Publication { name: $name, `identifier#issn_e`: $issn, `identifier#issn_l`: $issn, `identifier#url`: $url }) RETURN id(p) as node_id"
-                        )
-                        result_create = await session.run(query_create_pub, name=title, issn=issn, url=url)
-                        new_pub_record = await result_create.single()
-                        if new_pub_record:
-                            self.logger.debug(f"Created new journal node for {title} with ISSN {issn}, url={url}.")
-                            output_results["new"].append(issn)
-                            pub_node_id = new_pub_record["node_id"]
-
-                # --- Step 2: Process Diffusion Data for the current Publication ---
-                if pub_node_id is not None:  # Only proceed if a Publication node was found or created
-                    if url and url.strip():
-                        self.logger.debug(f"Updating url:{url} if needed...")
-                        query_update_url = (
-                            """
-                            MATCH (p:Publication) 
-                            WHERE id(p) = $pub_id AND 
-                            (p.`identifier#url` IS NULL OR p.`identifier#url` = "") 
-                            SET p.`identifier#url` = $url
-                            """
-                        )
-                        await session.run(query_update_url, pub_id=pub_node_id, url=url)
-
-                    diffusion = journal.get("diffusion", {})
-                    all_db_strings = []
-                    for category, db_list in diffusion.items():
-                        if isinstance(db_list, list):
-                            all_db_strings.extend(db_list)
-
-                    for index_name in all_db_strings:
-                        # Query 4: Find Index node
-                        query_find_index = (
-                            "MATCH (i:Index) WHERE i.name = $index_name RETURN id(i) as node_id"
-                        )
-                        result_index = await session.run(query_find_index, index_name=index_name)
-                        index_record = await result_index.single()
-
-                        if index_record:
-                            index_node_id = index_record["node_id"]
-                            # Query 5: Check for existing IN_INDEX relationship
-                            query_check_rel = (
-                                "MATCH (p) WHERE id(p) = $pub_id "
-                                "MATCH (i) WHERE id(i) = $index_id "
-                                "OPTIONAL MATCH (p)-[r:IN_INDEX]->(i) "
-                                "RETURN id(r) as rel_id"  # Use id() function
-                            )
-                            result_rel = await session.run(query_check_rel, pub_id=pub_node_id, index_id=index_node_id)
-                            rel_record = await result_rel.single()
-
-                            if rel_record and rel_record["rel_id"] is not None:
-                                # Relationship exists, update its properties
-                                rel_id = rel_record["rel_id"]
-                                query_update_rel = (
-                                    "MATCH ()-[r:IN_INDEX]->() WHERE id(r) = $rel_id "
-                                    "SET r.source = $source, r.date = $date"
-                                )
-                                await session.run(query_update_rel, rel_id=rel_id, source="MIAR", date=2025)
-                                self.logger.debug(f"Updated existing IN_INDEX relationship for {title} ({issn}) and {index_name}.")
-                            else:
-                                # Relationship does not exist, create it
-                                query_create_rel = (
-                                    "MATCH (p) WHERE id(p) = $pub_id "
-                                    "MATCH (i) WHERE id(i) = $index_id "
-                                    "CREATE (p)-[:IN_INDEX {source: $source, date: $date}]->(i)"
-                                )
-                                await session.run(query_create_rel, pub_id=pub_node_id, index_id=index_node_id, source="MIAR", date=2025)
-                                self.logger.debug(f"Created new IN_INDEX relationship for {title} ({issn}) and {index_name}.")
+                        # Find by name
+                        r2 = await session.run(
+                            "MATCH (p:Publication) WHERE p.name = $title RETURN p.iroko_uuid as uuid",
+                            title=title)
+                        record = await r2.single()
+                        if record:
+                            output_results["name"].append(issn)
+                            pub_uuid = record["uuid"]
                         else:
-                            # Index not found in DB
-                            self.logger.warning(f"Index '{index_name}' from journal {issn} not found in Neo4j database.")
-                            if index_name not in output_results["index_not_found"]:
-                                output_results["index_not_found"].append(index_name)
+                            # Create via NodeService
+                            node = await service.merge_node(
+                                name=title,
+                                labels=['Publication'],
+                                data={'identifier#issn_e': issn, 'identifier#issn_l': issn, 'identifier#url': url}
+                            )
+                            output_results["new"].append(issn)
+                            pub_uuid = str(node.iroko_uuid)
 
-            # --- Step 3: Process old IN_INDEX relationships ---
-            # Query 6: Find IN_INDEX relationships without required properties
-            # Use NULL checks instead of NOT EXISTS to avoid property key warnings
-            query_find_old_rels = (
-                "MATCH (p:Publication)-[r:IN_INDEX]->(i:Index) "
-                "WHERE r.source IS NULL OR r.date IS NULL "  # Simple NULL checks
-                "RETURN i.name AS index_name, id(r) AS rel_id"  # Use id() function
-            )
-            result_old_rels = await session.run(query_find_old_rels)
-            async for record in result_old_rels:
-                index_name = record["index_name"]
-                rel_id = record["rel_id"]
-                output_results["old_index"].append(index_name)
-                # Query 7: Update the old relationship properties
-                query_update_old_rel = (
-                    "MATCH ()-[r:IN_INDEX]->() WHERE id(r) = $rel_id "
-                    "SET r.source = $source, r.date = $date"
-                )
-                await session.run(query_update_old_rel, rel_id=rel_id, source="MIAR", date=2022)
-                self.logger.debug(f"Updated old IN_INDEX relationship for Index: {index_name}.")
+                    if pub_uuid:
+                        if url and url.strip():
+                            r3 = await session.run(
+                                "MATCH (p:Publication {iroko_uuid: $uuid}) "
+                                "RETURN p.`identifier#url` as url", uuid=pub_uuid)
+                            existing = await r3.single()
+                            if existing and existing.get("url") in (None, ""):
+                                await service.set_node_properties(UUID(pub_uuid), {"identifier#url": url})
 
-        finally:
-            await session.close()  # Ensure session is closed
+                        diffusion = journal.get("diffusion", {})
+                        all_idx_names = []
+                        for cat, lst in diffusion.items():
+                            if isinstance(lst, list):
+                                all_idx_names.extend(lst)
 
-        # Write output results to file
+                        for idx_name in all_idx_names:
+                            r4 = await session.run(
+                                "MATCH (i:Index) WHERE i.name = $n RETURN i.iroko_uuid as uuid",
+                                n=idx_name)
+                            idx_rec = await r4.single()
+                            if idx_rec and idx_rec.get("uuid"):
+                                await service.merge_relationship(
+                                    UUID(pub_uuid), UUID(idx_rec["uuid"]), "IN_INDEX",
+                                    {"source": "MIAR", "date": 2025})
+                            else:
+                                if idx_name not in output_results["index_not_found"]:
+                                    output_results["index_not_found"].append(idx_name)
+
+                # Step 3: Fix old IN_INDEX relationships missing source/date
+                r5 = await session.run(
+                    "MATCH (p:Publication)-[r:IN_INDEX]->(i:Index) "
+                    "WHERE r.source IS NULL OR r.date IS NULL "
+                    "RETURN p.iroko_uuid as pub_uuid, i.iroko_uuid as idx_uuid")
+                async for rec in r5:
+                    output_results["old_index"].append(rec["idx_uuid"])
+                    await service.merge_relationship(
+                        UUID(rec["pub_uuid"]), UUID(rec["idx_uuid"]), "IN_INDEX",
+                        {"source": "MIAR", "date": 2022})
+
+            finally:
+                await session.close()
+
         try:
             with open(self.output_path, 'w', encoding='utf-8') as f:
                 json.dump(output_results, f, indent=2, ensure_ascii=False)
-            self.logger.info(f"Output results written to {self.output_path}")
         except Exception as e:
             self.logger.error(f"Failed to write output file {self.output_path}: {e}")
-            raise  # Re-raise to fail the task
+            raise
 
         self.logger.info(f"Completed MIAR data processing task {self.task_id}")
         return output_results

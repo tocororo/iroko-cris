@@ -48,6 +48,27 @@ class SyncStatus(BaseModel):
     last_sync_at: Optional[datetime] = None
     last_sync_direction: Optional[str] = None
 
+class NodeMerge(BaseModel):
+    """Schema for merge_node operation — same as NodeCreate but with optional iroko_uuid."""
+    iroko_uuid: Optional[UUID4] = None
+    name: str
+    labels: List[str] = Field(default_factory=list)
+    data: Dict[str, Any] = Field(default_factory=dict)
+    relationships: List[RelationshipItem] = Field(default_factory=list)
+
+class RelationshipMerge(BaseModel):
+    """Schema for merge_relationship operation."""
+    from_uuid: UUID4
+    to_uuid: UUID4
+    type: str
+    properties: Dict[str, Any] = Field(default_factory=dict)
+
+    @field_validator('type')
+    def validate_type(cls, v):
+        if not re.match(r'^[A-Z0-9_]+$', v.upper()):
+            raise ValueError('Relationship type must be alphanumeric and uppercase')
+        return v.upper()
+
 class SyncRequest(BaseModel):
     direction: str = Field(..., pattern=r"^(to-graph|from-graph)$")
     batch_size: int = Field(default=500, ge=1, le=5000)

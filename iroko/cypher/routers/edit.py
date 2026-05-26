@@ -2,12 +2,12 @@ from fastapi import APIRouter, HTTPException, Depends
 from neo4j import AsyncSession
 from sqlalchemy.ext.asyncio import AsyncSession as SQLAsyncSession
 from typing import Dict, Any, List
-from datetime import datetime
+from uuid import UUID
 import logging
 
 from iroko.cypher.schemas_edit import (
-    NodePropertyUpdate, 
-    RelationshipUpdate, 
+    NodePropertyUpdate,
+    RelationshipUpdate,
     NodeEditRequest,
     RelationshipDeleteRequest,
     EditResponse
@@ -22,8 +22,8 @@ logger = logging.getLogger('iroko-cris.cypher')
 
 router = APIRouter(prefix="/edit", tags=["cypher-edit"])
 
-async def get_db_session():
-    """Async generator for Neo4j sessions"""
+
+async def get_mg_session():
     session = neo4j_db.get_session()
     try:
         yield session
@@ -31,305 +31,171 @@ async def get_db_session():
         await session.close()
 
 
-async def _sync_node_to_pg(mg_uuid: str, pg: SQLAsyncSession, mg: AsyncSession):
-    """Sync a single node from Memgraph to PostgreSQL after a write."""
-    try:
-        service = PGNodeService(pg, mg)
-        await service.sync_single_from_memgraph(mg_uuid)
-    except Exception as e:
-        logger.warning(f"Post-write PG sync failed for {mg_uuid}: {e}")
+async def _node_exists(mg: AsyncSession, iroko_uuid: str) -> bool:
+    result = await mg.run(
+        "MATCH (n {iroko_uuid: $uuid}) RETURN n LIMIT 1",
+        uuid=iroko_uuid)
+    return await result.single() is not None
 
-def _sanitize_property_key(key: str) -> str:
-    """Sanitize property keys to prevent Cypher injection"""
-    # Remove backticks and other potentially dangerous characters
-    sanitized = key.replace('`', '').replace('\\', '')
-    return f"`{sanitized}`"
 
-async def _node_exists(session: AsyncSession, iroko_uuid: str) -> bool:
-    """Check if a node with the given iroko_uuid exists"""
-    query = "MATCH (n {iroko_uuid: $iroko_uuid}) RETURN n LIMIT 1"
-    result = await session.run(query, iroko_uuid=iroko_uuid)
-    record = await result.single()
-    return record is not None
+async def _read_node_from_mg(mg: AsyncSession, iroko_uuid: str) -> tuple[dict, list[str]]:
+    result = await mg.run(
+        "MATCH (n {iroko_uuid: $uuid}) RETURN properties(n) as props, labels(n) as labels",
+        uuid=iroko_uuid)
+    rec = await result.single()
+    if not rec:
+        raise HTTPException(status_code=404, detail=f"Node {iroko_uuid} not found in graph")
+    props = dict(rec["props"])
+    labels = list(rec["labels"])
+    # Strip internal keys
+    for k in list(props.keys()):
+        if k.startswith('_'):
+            del props[k]
+    if "Node" in labels:
+        labels.remove("Node")
+    return props, labels
 
-async def _relationship_exists(
-    session: AsyncSession, 
-    from_uuid: str, 
-    to_uuid: str, 
-    relation_type: str
-) -> bool:
-    """Check if a relationship exists between two nodes"""
-    query = """
-    MATCH (a {iroko_uuid: $from_uuid})-[r:%s]->(b {iroko_uuid: $to_uuid})
-    RETURN r LIMIT 1
-    """ % relation_type
-    
-    result = await session.run(query, from_uuid=from_uuid, to_uuid=to_uuid)
-    record = await result.single()
-    return record is not None
 
 @router.patch("/node/properties", response_model=EditResponse)
 async def update_node_properties(
     update: NodePropertyUpdate,
-    session: AsyncSession = Depends(get_db_session),
+    session: AsyncSession = Depends(get_mg_session),
     pg: SQLAsyncSession = Depends(get_pg_session),
     current_user: TokenUser = Depends(require_edit_permission)
 ):
-    """
-    Update properties of a node by iroko_uuid
-    """
     try:
         if not await _node_exists(session, update.iroko_uuid):
-            raise HTTPException(status_code=404, detail=f"Node with iroko_uuid '{update.iroko_uuid}' not found")
+            raise HTTPException(status_code=404, detail=f"Node '{update.iroko_uuid}' not found")
 
-        set_clauses = []
-        parameters = {"iroko_uuid": update.iroko_uuid}
-
-        for i, (key, value) in enumerate(update.properties.items()):
-            sanitized_key = _sanitize_property_key(key)
-            param_name = f"prop_{i}"
-            set_clauses.append(f"n.{sanitized_key} = ${param_name}")
-            parameters[param_name] = value
-
-        if not set_clauses:
+        if not update.properties:
             return EditResponse(success=True, message="No properties to update")
 
-        set_clause = "SET " + ", ".join(set_clauses)
+        props, labels = await _read_node_from_mg(session, update.iroko_uuid)
+        props.update(update.properties)
 
-        query = f"""
-        MATCH (n {{iroko_uuid: $iroko_uuid}})
-        {set_clause}
-        SET n._updated_at = $now
-        RETURN count(n) as updated_count
-        """
-        parameters["now"] = datetime.utcnow().isoformat()
-
-        result = await session.run(query, **parameters)
-        record = await result.single()
-        updated_count = record["updated_count"] if record else 0
+        service = PGNodeService(pg, session)
+        await service.merge_node(
+            iroko_uuid=UUID(update.iroko_uuid),
+            labels=labels,
+            data=props)
 
         logger.info(f"User {current_user.email} updated properties for node {update.iroko_uuid}")
-
-        await _sync_node_to_pg(update.iroko_uuid, pg, session)
-
         return EditResponse(
             success=True,
-            message=f"Successfully updated {updated_count} node(s)",
-            updated_properties=updated_count
-        )
+            message=f"Updated {len(update.properties)} properties",
+            updated_properties=len(update.properties))
 
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error updating node properties: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Failed to update node: {str(e)}")
+        logger.error(f"Error updating node properties: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 @router.post("/relationships", response_model=EditResponse)
 async def create_or_update_relationship(
     relationship: RelationshipUpdate,
-    session: AsyncSession = Depends(get_db_session),
+    session: AsyncSession = Depends(get_mg_session),
     pg: SQLAsyncSession = Depends(get_pg_session),
     current_user: TokenUser = Depends(require_edit_permission)
 ):
-    """
-    Create or update a relationship between two nodes
-    """
     try:
         if not await _node_exists(session, relationship.from_uuid):
-            raise HTTPException(status_code=404, detail=f"Source node with iroko_uuid '{relationship.from_uuid}' not found")
-
+            raise HTTPException(status_code=404, detail=f"Source node '{relationship.from_uuid}' not found")
         if not await _node_exists(session, relationship.to_uuid):
-            raise HTTPException(status_code=404, detail=f"Target node with iroko_uuid '{relationship.to_uuid}' not found")
+            raise HTTPException(status_code=404, detail=f"Target node '{relationship.to_uuid}' not found")
 
-        if not relationship.relation_type.replace('_', '').isalnum():
-            raise HTTPException(status_code=400, detail="Invalid relationship type")
+        service = PGNodeService(pg, session)
+        await service.merge_relationship(
+            UUID(relationship.from_uuid),
+            UUID(relationship.to_uuid),
+            relationship.relation_type,
+            relationship.properties)
 
-        if relationship.properties:
-            set_clauses = []
-            parameters = {
-                "from_uuid": relationship.from_uuid,
-                "to_uuid": relationship.to_uuid
-            }
-
-            for i, (key, value) in enumerate(relationship.properties.items()):
-                sanitized_key = _sanitize_property_key(key)
-                param_name = f"rel_prop_{i}"
-                set_clauses.append(f"r.{sanitized_key} = ${param_name}")
-                parameters[param_name] = value
-
-            set_clause = "SET " + ", ".join(set_clauses)
-        else:
-            set_clause = ""
-            parameters = {
-                "from_uuid": relationship.from_uuid,
-                "to_uuid": relationship.to_uuid
-            }
-
-        query = f"""
-        MATCH (a {{iroko_uuid: $from_uuid}}), (b {{iroko_uuid: $to_uuid}})
-        MERGE (a)-[r:{relationship.relation_type}]->(b)
-        {set_clause}
-        SET a._updated_at = $now, b._updated_at = $now
-        RETURN count(r) as relationship_count
-        """
-        parameters["now"] = datetime.utcnow().isoformat()
-
-        result = await session.run(query, **parameters)
-        record = await result.single()
-        relationship_count = record["relationship_count"] if record else 0
-
-        logger.info(f"User {current_user.email} created/updated relationship {relationship.relation_type} between {relationship.from_uuid} and {relationship.to_uuid}")
-
-        await _sync_node_to_pg(relationship.from_uuid, pg, session)
-        await _sync_node_to_pg(relationship.to_uuid, pg, session)
-
+        logger.info(f"User {current_user.email} created/updated relationship {relationship.relation_type}")
         return EditResponse(
             success=True,
-            message=f"Successfully created/updated relationship",
-            updated_relationships=relationship_count
-        )
+            message=f"Relationship {relationship.relation_type} created/updated",
+            updated_relationships=1)
 
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error creating relationship: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Failed to create relationship: {str(e)}")
+        logger.error(f"Error creating relationship: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 @router.delete("/relationships", response_model=EditResponse)
 async def delete_relationship(
     delete_request: RelationshipDeleteRequest,
-    session: AsyncSession = Depends(get_db_session),
+    session: AsyncSession = Depends(get_mg_session),
     pg: SQLAsyncSession = Depends(get_pg_session),
     current_user: TokenUser = Depends(require_edit_permission)
 ):
-    """
-    Delete a relationship between two nodes
-    """
     try:
-        if not await _relationship_exists(
-            session,
-            delete_request.from_uuid,
-            delete_request.to_uuid,
-            delete_request.relation_type
-        ):
-            raise HTTPException(
-                status_code=404,
-                detail=f"Relationship {delete_request.relation_type} between {delete_request.from_uuid} and {delete_request.to_uuid} not found"
-            )
+        service = PGNodeService(pg, session)
+        result = await service.delete_relationship(
+            UUID(delete_request.from_uuid),
+            UUID(delete_request.to_uuid),
+            delete_request.relation_type)
 
-        query = f"""
-        MATCH (a {{iroko_uuid: $from_uuid}})-[r:{delete_request.relation_type}]->(b {{iroko_uuid: $to_uuid}})
-        SET a._updated_at = $now, b._updated_at = $now
-        DELETE r
-        RETURN count(r) as deleted_count
-        """
-        now_val = datetime.utcnow().isoformat()
-        result = await session.run(query,
-                                 from_uuid=delete_request.from_uuid,
-                                 to_uuid=delete_request.to_uuid,
-                                 now=now_val)
-        record = await result.single()
-        deleted_count = record["deleted_count"] if record else 0
+        if result is None:
+            raise HTTPException(status_code=404, detail="Source node not found")
 
-        logger.info(f"User {current_user.email} deleted relationship {delete_request.relation_type} between {delete_request.from_uuid} and {delete_request.to_uuid}")
-
-        await _sync_node_to_pg(delete_request.from_uuid, pg, session)
-        await _sync_node_to_pg(delete_request.to_uuid, pg, session)
-
+        logger.info(f"User {current_user.email} deleted relationship {delete_request.relation_type}")
         return EditResponse(
             success=True,
-            message=f"Successfully deleted relationship",
-            deleted_relationships=deleted_count
-        )
+            message=f"Relationship {delete_request.relation_type} deleted",
+            deleted_relationships=1)
 
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error deleting relationship: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Failed to delete relationship: {str(e)}")
+        logger.error(f"Error deleting relationship: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 @router.put("/node/full", response_model=EditResponse)
 async def full_node_edit(
     edit_request: NodeEditRequest,
-    session: AsyncSession = Depends(get_db_session),
+    session: AsyncSession = Depends(get_mg_session),
     pg: SQLAsyncSession = Depends(get_pg_session),
     current_user: TokenUser = Depends(require_edit_permission)
 ):
-    """
-    Comprehensive node edit: update properties and relationships in a single transaction
-    """
     try:
         if not await _node_exists(session, edit_request.iroko_uuid):
-            raise HTTPException(status_code=404, detail=f"Node with iroko_uuid '{edit_request.iroko_uuid}' not found")
+            raise HTTPException(status_code=404, detail=f"Node '{edit_request.iroko_uuid}' not found")
 
-        queries = []
-        parameters = {"iroko_uuid": edit_request.iroko_uuid, "now": datetime.utcnow().isoformat()}
+        service = PGNodeService(pg, session)
+        props, labels = await _read_node_from_mg(session, edit_request.iroko_uuid)
 
-        # Update properties + _updated_at
         if edit_request.properties:
-            set_clauses = ["n._updated_at = $now"]
-            for i, (key, value) in enumerate(edit_request.properties.items()):
-                sanitized_key = _sanitize_property_key(key)
-                param_name = f"prop_{i}"
-                set_clauses.append(f"n.{sanitized_key} = ${param_name}")
-                parameters[param_name] = value
+            props.update(edit_request.properties)
 
-            if set_clauses:
-                property_query = f"""
-                MATCH (n {{iroko_uuid: $iroko_uuid}})
-                SET {', '.join(set_clauses)}
-                """
-                queries.append(property_query)
+        await service.merge_node(
+            iroko_uuid=UUID(edit_request.iroko_uuid),
+            labels=labels,
+            data=props)
 
-        # Process relationships
-        for i, rel in enumerate(edit_request.relationships):
+        for rel in edit_request.relationships:
             if not await _node_exists(session, rel.to_uuid):
-                logger.warning(f"Target node {rel.to_uuid} for relationship not found, skipping")
+                logger.warning(f"Target node {rel.to_uuid} not found, skipping relationship")
                 continue
-
-            if not rel.relation_type.replace('_', '').isalnum():
-                logger.warning(f"Invalid relationship type {rel.relation_type}, skipping")
-                continue
-
-            rel_params = {}
-            set_clauses = ["a._updated_at = $now"]
-
-            if rel.properties:
-                for j, (key, value) in enumerate(rel.properties.items()):
-                    sanitized_key = _sanitize_property_key(key)
-                    param_name = f"rel_{i}_prop_{j}"
-                    set_clauses.append(f"r.{sanitized_key} = ${param_name}")
-                    rel_params[param_name] = value
-
-            set_clause = "SET " + ", ".join(set_clauses) if set_clauses else ""
-
-            rel_query = f"""
-            MATCH (a {{iroko_uuid: $iroko_uuid}}), (b {{iroko_uuid: $to_uuid_{i}}})
-            MERGE (a)-[r:{rel.relation_type}]->(b)
-            {set_clause}
-            """
-
-            queries.append(rel_query)
-            parameters[f"to_uuid_{i}"] = rel.to_uuid
-            parameters.update(rel_params)
-
-        for query in queries:
-            result = await session.run(query, **parameters)
-            await result.consume()
+            await service.merge_relationship(
+                UUID(edit_request.iroko_uuid),
+                UUID(rel.to_uuid),
+                rel.relation_type,
+                rel.properties)
 
         logger.info(f"User {current_user.email} performed full edit on node {edit_request.iroko_uuid}")
-
-        await _sync_node_to_pg(edit_request.iroko_uuid, pg, session)
-
         return EditResponse(
             success=True,
-            message=f"Successfully updated node and relationships",
+            message="Full node edit complete",
             updated_properties=len(edit_request.properties),
-            updated_relationships=len(edit_request.relationships)
-        )
+            updated_relationships=len(edit_request.relationships))
 
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error in full node edit: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Failed to update node: {str(e)}")
+        logger.error(f"Error in full node edit: {e}")
+        raise HTTPException(status_code=500, detail=str(e))

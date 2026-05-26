@@ -1,0 +1,2587 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Iroko API",
+    "description": "REST API for Iroko CRIS \u2014 a Current Research Information System backed by\nPostgreSQL (source of truth) and Memgraph (graph store). All writes go\nthrough NodeService which atomically updates both stores.\n\nAuthentication: Bearer JWT tokens obtained via `/v1/auth/token`.\nMost endpoints require authentication. Superuser role required for\nadmin and crawler endpoints.\n",
+    "version": "0.1.0",
+    "contact": {
+      "name": "Iroko CRIS Team",
+      "url": "https://sceiba.cu"
+    }
+  },
+  "servers": [
+    {
+      "url": "/api",
+      "description": "Default base path (configured via BASE_PATH env)"
+    }
+  ],
+  "paths": {
+    "/health": {
+      "get": {
+        "operationId": "healthCheck",
+        "summary": "Health check",
+        "tags": [
+          "Health"
+        ],
+        "responses": {
+          "200": {
+            "description": "Service is healthy",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "example": "ok"
+                    },
+                    "environment": {
+                      "type": "string",
+                      "example": "development"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/auth/token": {
+      "post": {
+        "operationId": "login",
+        "summary": "Login (get JWT token)",
+        "tags": [
+          "Authentication"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "username": {
+                    "type": "string",
+                    "format": "email",
+                    "description": "User email"
+                  },
+                  "password": {
+                    "type": "string",
+                    "format": "password"
+                  }
+                },
+                "required": [
+                  "username",
+                  "password"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Login successful",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Token"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid credentials"
+          }
+        }
+      }
+    },
+    "/v1/auth/register": {
+      "post": {
+        "operationId": "register",
+        "summary": "Register a new user",
+        "tags": [
+          "Authentication"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UserCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Registration successful, returns token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Token"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Email already registered"
+          }
+        }
+      }
+    },
+    "/v1/auth/users": {
+      "get": {
+        "operationId": "listUsers",
+        "summary": "List all users (superuser)",
+        "tags": [
+          "Users"
+        ],
+        "parameters": [
+          {
+            "name": "skip",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 0,
+              "minimum": 0
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 100,
+              "minimum": 1,
+              "maximum": 1000
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of users",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/UserResponse"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ]
+      },
+      "post": {
+        "operationId": "createUser",
+        "summary": "Create a new user (superuser)",
+        "tags": [
+          "Users"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UserCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "User created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Email already registered"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ]
+      }
+    },
+    "/v1/auth/users/{user_id}": {
+      "put": {
+        "operationId": "updateUser",
+        "summary": "Update a user (superuser)",
+        "tags": [
+          "Users"
+        ],
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UserCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "User updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "User not found"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ]
+      }
+    },
+    "/v1/auth/users/{user_id}/roles/{role_name}": {
+      "post": {
+        "operationId": "assignRole",
+        "summary": "Assign a role to a user (superuser)",
+        "tags": [
+          "Users"
+        ],
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "role_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Role assigned",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message": {
+                      "type": "string",
+                      "example": "Role 'admin' assigned successfully"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Failed to assign role"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ]
+      },
+      "delete": {
+        "operationId": "removeRole",
+        "summary": "Remove a role from a user (superuser)",
+        "tags": [
+          "Users"
+        ],
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "role_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Role removed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message": {
+                      "type": "string",
+                      "example": "Role 'viewer' removed successfully"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Failed to remove role"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ]
+      }
+    },
+    "/v1/auth/roles": {
+      "get": {
+        "operationId": "listRoles",
+        "summary": "List all roles (superuser)",
+        "tags": [
+          "Roles"
+        ],
+        "responses": {
+          "200": {
+            "description": "List of roles",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/RoleResponse"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ]
+      },
+      "post": {
+        "operationId": "createRole",
+        "summary": "Create a new role (superuser)",
+        "tags": [
+          "Roles"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RoleCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Role created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RoleResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Role name already exists"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ]
+      }
+    },
+    "/v1/auth/captcha": {
+      "get": {
+        "operationId": "generateCaptcha",
+        "summary": "Generate a CAPTCHA challenge",
+        "tags": [
+          "CAPTCHA"
+        ],
+        "responses": {
+          "200": {
+            "description": "CAPTCHA generated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CaptchaResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/auth/captcha/": {
+      "get": {
+        "operationId": "generateCaptchaAlt",
+        "summary": "Generate a CAPTCHA challenge (with trailing slash)",
+        "tags": [
+          "CAPTCHA"
+        ],
+        "responses": {
+          "200": {
+            "description": "CAPTCHA generated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CaptchaResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/auth/captcha/validate": {
+      "post": {
+        "operationId": "validateCaptcha",
+        "summary": "Validate a CAPTCHA challenge",
+        "tags": [
+          "CAPTCHA"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "captcha_id": {
+                    "type": "string"
+                  },
+                  "user_input": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "captcha_id",
+                  "user_input"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Validation result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "valid": {
+                      "type": "boolean"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/auth/captcha/cleanup": {
+      "post": {
+        "operationId": "cleanupCaptchas",
+        "summary": "Clean up expired CAPTCHAs (admin)",
+        "tags": [
+          "CAPTCHA"
+        ],
+        "responses": {
+          "200": {
+            "description": "Expired CAPTCHAs cleaned up",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message": {
+                      "type": "string",
+                      "example": "Expired CAPTCHAs cleaned up successfully"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/cypher/query": {
+      "post": {
+        "operationId": "executeCypherQuery",
+        "summary": "Execute a read-only Cypher query",
+        "tags": [
+          "Cypher"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CypherQuery"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Query results",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Query execution failed"
+          }
+        }
+      }
+    },
+    "/v1/cypher/query/export/csv": {
+      "post": {
+        "operationId": "exportCypherQueryToCsv",
+        "summary": "Export Cypher query results as CSV",
+        "tags": [
+          "Cypher"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CypherQuery"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "CSV file download",
+            "content": {
+              "text/csv": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Export failed"
+          },
+          "404": {
+            "description": "No data found"
+          }
+        }
+      }
+    },
+    "/v1/cypher/fulltext": {
+      "post": {
+        "operationId": "executeFulltextQuery",
+        "summary": "Execute a full-text index search",
+        "tags": [
+          "Cypher"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FullTextCypherQuery"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Search results",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Query execution failed"
+          }
+        }
+      }
+    },
+    "/v1/cypher/fulltext/export/csv": {
+      "post": {
+        "operationId": "exportFulltextToCsv",
+        "summary": "Export full-text search results as CSV",
+        "tags": [
+          "Cypher"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FullTextCypherQuery"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "CSV file download",
+            "content": {
+              "text/csv": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Export failed"
+          },
+          "404": {
+            "description": "No data found"
+          }
+        }
+      }
+    },
+    "/v1/cypher/edit/node/properties": {
+      "patch": {
+        "operationId": "updateNodeProperties",
+        "summary": "Update node properties",
+        "tags": [
+          "Cypher Edit"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NodePropertyUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Properties updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EditResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Node not found"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ]
+      }
+    },
+    "/v1/cypher/edit/relationships": {
+      "post": {
+        "operationId": "createOrUpdateRelationship",
+        "summary": "Create or update a relationship",
+        "tags": [
+          "Cypher Edit"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RelationshipUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Relationship created/updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EditResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Source or target node not found"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ]
+      },
+      "delete": {
+        "operationId": "deleteRelationship",
+        "summary": "Delete a relationship",
+        "tags": [
+          "Cypher Edit"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RelationshipDeleteRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Relationship deleted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EditResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Source node not found"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ]
+      }
+    },
+    "/v1/cypher/edit/node/full": {
+      "put": {
+        "operationId": "fullNodeEdit",
+        "summary": "Full node edit (properties + relationships)",
+        "tags": [
+          "Cypher Edit"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NodeEditRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Node updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EditResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Node not found"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ]
+      }
+    },
+    "/v1/nodes/": {
+      "post": {
+        "operationId": "createNode",
+        "summary": "Create a new node",
+        "tags": [
+          "Nodes"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NodeCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Node created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NodeResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Failed to create node"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ]
+      }
+    },
+    "/v1/nodes/search": {
+      "get": {
+        "operationId": "searchNodes",
+        "summary": "Search nodes by name",
+        "tags": [
+          "Nodes"
+        ],
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 10
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Search results",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/NodeResponse"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ]
+      }
+    },
+    "/v1/nodes/{node_id}": {
+      "get": {
+        "operationId": "getNode",
+        "summary": "Get a node by UUID",
+        "tags": [
+          "Nodes"
+        ],
+        "parameters": [
+          {
+            "name": "node_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Node found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NodeResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Node not found"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ]
+      },
+      "put": {
+        "operationId": "updateNode",
+        "summary": "Update a node",
+        "tags": [
+          "Nodes"
+        ],
+        "parameters": [
+          {
+            "name": "node_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NodeUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Node updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NodeResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Node not found"
+          },
+          "500": {
+            "description": "Failed to update node"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ]
+      },
+      "delete": {
+        "operationId": "deleteNode",
+        "summary": "Delete a node",
+        "tags": [
+          "Nodes"
+        ],
+        "parameters": [
+          {
+            "name": "node_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Node deleted (no content)"
+          },
+          "404": {
+            "description": "Node not found"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ]
+      }
+    },
+    "/v1/nodes/sync/to-graph": {
+      "post": {
+        "operationId": "syncToGraph",
+        "summary": "Reconstruct Memgraph from PostgreSQL (PG \u2192 MG)",
+        "tags": [
+          "Nodes Sync"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SyncRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Sync initiated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Sync failed"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ]
+      }
+    },
+    "/v1/nodes/sync/from-graph": {
+      "post": {
+        "operationId": "syncFromGraph",
+        "summary": "Import nodes from Memgraph into PostgreSQL (MG \u2192 PG)",
+        "tags": [
+          "Nodes Sync"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SyncRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Sync initiated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Sync failed"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ]
+      }
+    },
+    "/v1/nodes/sync/status": {
+      "get": {
+        "operationId": "getSyncStatus",
+        "summary": "Show sync status between PG and MG",
+        "tags": [
+          "Nodes Sync"
+        ],
+        "responses": {
+          "200": {
+            "description": "Sync status",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SyncStatus"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/nodes/admin/invalid-nodes": {
+      "get": {
+        "operationId": "getInvalidNodes",
+        "summary": "Check for invalid legacy nodes in Memgraph",
+        "tags": [
+          "Nodes Admin"
+        ],
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 100
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of invalid nodes"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ]
+      }
+    },
+    "/v1/nodes/admin/import-legacy": {
+      "post": {
+        "operationId": "importLegacyGraph",
+        "summary": "Import legacy nodes from Memgraph into PostgreSQL",
+        "tags": [
+          "Nodes Admin"
+        ],
+        "responses": {
+          "200": {
+            "description": "Import completed"
+          },
+          "500": {
+            "description": "Import failed"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ]
+      }
+    },
+    "/v1/evals/methodologies": {
+      "get": {
+        "operationId": "listMethodologies",
+        "summary": "List all evaluation methodologies",
+        "tags": [
+          "Evaluations"
+        ],
+        "responses": {
+          "200": {
+            "description": "List of methodologies",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Methodology"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/evals/methodologies/{methodology_id}": {
+      "get": {
+        "operationId": "getMethodology",
+        "summary": "Get a specific methodology",
+        "tags": [
+          "Evaluations"
+        ],
+        "parameters": [
+          {
+            "name": "methodology_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Methodology found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Methodology"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Methodology not found"
+          }
+        }
+      }
+    },
+    "/v1/evals/evaluate/{methodology_id}/{node_id}": {
+      "get": {
+        "operationId": "evaluateNode",
+        "summary": "Evaluate a node using a methodology",
+        "tags": [
+          "Evaluations"
+        ],
+        "parameters": [
+          {
+            "name": "methodology_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "node_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Evaluation result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EvaluationResult"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Methodology or node not found"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ]
+      }
+    },
+    "/v1/evals/evaluate/complete": {
+      "post": {
+        "operationId": "completeEvaluation",
+        "summary": "Complete an evaluation by providing answers",
+        "tags": [
+          "Evaluations"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EvaluationResult"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Evaluation completed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EvaluationResult"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ]
+      }
+    },
+    "/v1/evals/evaluate/store": {
+      "post": {
+        "operationId": "storeEvaluation",
+        "summary": "Store an evaluation result",
+        "tags": [
+          "Evaluations"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EvaluationResult"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Evaluation stored",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StoredEvaluation"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ]
+      }
+    },
+    "/v1/evals/history/{node_id}": {
+      "get": {
+        "operationId": "getEvaluationHistory",
+        "summary": "Get evaluation history for a node",
+        "tags": [
+          "Evaluations"
+        ],
+        "parameters": [
+          {
+            "name": "node_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "methodology_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Evaluation history",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/StoredEvaluation"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/crawler/tasks": {
+      "get": {
+        "operationId": "listCrawlerTasks",
+        "summary": "List all available crawler tasks",
+        "tags": [
+          "Crawler"
+        ],
+        "responses": {
+          "200": {
+            "description": "List of task IDs",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ]
+      }
+    },
+    "/v1/crawler/tasks/{task_id}/execute": {
+      "post": {
+        "operationId": "executeCrawlerTask",
+        "summary": "Execute a crawler task",
+        "tags": [
+          "Crawler"
+        ],
+        "parameters": [
+          {
+            "name": "task_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Task execution started",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "execution_id": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "status": {
+                      "type": "string",
+                      "example": "running"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Task not found"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ]
+      }
+    },
+    "/v1/crawler/tasks/{task_id}/status": {
+      "get": {
+        "operationId": "getCrawlerTaskStatus",
+        "summary": "Get status of a crawler task",
+        "tags": [
+          "Crawler"
+        ],
+        "parameters": [
+          {
+            "name": "task_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Task execution status",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskExecution"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No execution found"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ]
+      }
+    },
+    "/v1/crawler/tasks/{task_id}/stop": {
+      "post": {
+        "operationId": "stopCrawlerTask",
+        "summary": "Stop a running crawler task",
+        "tags": [
+          "Crawler"
+        ],
+        "parameters": [
+          {
+            "name": "task_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Task stopped",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ]
+      }
+    },
+    "/v1/crawler/stats": {
+      "get": {
+        "operationId": "getCrawlerStats",
+        "summary": "Get crawler statistics",
+        "tags": [
+          "Crawler"
+        ],
+        "responses": {
+          "200": {
+            "description": "Crawler statistics",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CrawlerStats"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ]
+      }
+    },
+    "/v1/crawler/executions": {
+      "get": {
+        "operationId": "listCrawlerExecutions",
+        "summary": "List recent task executions",
+        "tags": [
+          "Crawler"
+        ],
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 10
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Recent executions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/TaskExecution"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ]
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "BearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "description": "JWT token obtained from `/v1/auth/token`"
+      }
+    },
+    "schemas": {
+      "Token": {
+        "type": "object",
+        "properties": {
+          "access_token": {
+            "type": "string"
+          },
+          "token_type": {
+            "type": "string",
+            "example": "bearer"
+          },
+          "user": {
+            "$ref": "#/components/schemas/UserResponse"
+          }
+        },
+        "required": [
+          "access_token",
+          "token_type",
+          "user"
+        ]
+      },
+      "UserCreate": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "format": "email"
+          },
+          "password": {
+            "type": "string",
+            "format": "password",
+            "minLength": 6
+          },
+          "full_name": {
+            "type": "string",
+            "nullable": true
+          },
+          "is_active": {
+            "type": "boolean",
+            "default": true
+          }
+        },
+        "required": [
+          "email",
+          "password"
+        ]
+      },
+      "UserResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "email": {
+            "type": "string",
+            "format": "email"
+          },
+          "full_name": {
+            "type": "string",
+            "nullable": true
+          },
+          "is_active": {
+            "type": "boolean"
+          },
+          "is_superuser": {
+            "type": "boolean"
+          },
+          "roles": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          }
+        },
+        "required": [
+          "id",
+          "email",
+          "is_active",
+          "is_superuser",
+          "roles",
+          "created_at"
+        ]
+      },
+      "RoleCreate": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string",
+            "nullable": true
+          },
+          "permissions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "default": []
+          }
+        },
+        "required": [
+          "name"
+        ]
+      },
+      "RoleResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string",
+            "nullable": true
+          },
+          "permissions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "permissions"
+        ]
+      },
+      "CaptchaResponse": {
+        "type": "object",
+        "properties": {
+          "captcha_id": {
+            "type": "string"
+          },
+          "captcha_image": {
+            "type": "string",
+            "description": "Base64-encoded PNG image with data URI prefix"
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "captcha_id",
+          "captcha_image",
+          "expires_at"
+        ]
+      },
+      "CypherQuery": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string",
+            "description": "Cypher query (read-only enforced by default)"
+          },
+          "parameters": {
+            "type": "object",
+            "nullable": true,
+            "description": "Query parameters"
+          },
+          "readonly": {
+            "type": "boolean",
+            "default": true
+          }
+        },
+        "required": [
+          "query"
+        ],
+        "example": {
+          "query": "MATCH (n:Person) WHERE n.name = $name RETURN n LIMIT 10",
+          "parameters": {
+            "name": "Alice"
+          },
+          "readonly": true
+        }
+      },
+      "FullTextCypherQuery": {
+        "type": "object",
+        "properties": {
+          "searchIndex": {
+            "type": "string",
+            "description": "Full-text index name"
+          },
+          "searchTerm": {
+            "type": "string"
+          },
+          "whereClause": {
+            "type": "string",
+            "default": ""
+          },
+          "orderClause": {
+            "type": "string",
+            "default": ""
+          },
+          "returnClause": {
+            "type": "string",
+            "default": ""
+          },
+          "parameters": {
+            "type": "object",
+            "nullable": true
+          },
+          "countTotal": {
+            "type": "boolean",
+            "default": false
+          }
+        },
+        "required": [
+          "searchIndex",
+          "searchTerm"
+        ],
+        "example": {
+          "searchIndex": "OrganizationSearch",
+          "searchTerm": "Pinar",
+          "whereClause": "WHERE n.status = $status",
+          "parameters": {
+            "status": "active"
+          }
+        }
+      },
+      "NodePropertyUpdate": {
+        "type": "object",
+        "properties": {
+          "iroko_uuid": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "properties": {
+            "type": "object"
+          }
+        },
+        "required": [
+          "iroko_uuid",
+          "properties"
+        ]
+      },
+      "RelationshipUpdate": {
+        "type": "object",
+        "properties": {
+          "from_uuid": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "to_uuid": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "relation_type": {
+            "type": "string",
+            "description": "Uppercase relationship type (e.g., HAS_AFFILIATION)"
+          },
+          "properties": {
+            "type": "object",
+            "nullable": true
+          }
+        },
+        "required": [
+          "from_uuid",
+          "to_uuid",
+          "relation_type"
+        ]
+      },
+      "RelationshipDeleteRequest": {
+        "type": "object",
+        "properties": {
+          "from_uuid": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "to_uuid": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "relation_type": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "from_uuid",
+          "to_uuid",
+          "relation_type"
+        ]
+      },
+      "NodeEditRequest": {
+        "type": "object",
+        "properties": {
+          "iroko_uuid": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "properties": {
+            "type": "object"
+          },
+          "relationships": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RelationshipUpdate"
+            }
+          }
+        },
+        "required": [
+          "iroko_uuid",
+          "properties",
+          "relationships"
+        ]
+      },
+      "EditResponse": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean"
+          },
+          "message": {
+            "type": "string"
+          },
+          "updated_properties": {
+            "type": "integer",
+            "nullable": true
+          },
+          "updated_relationships": {
+            "type": "integer",
+            "nullable": true
+          },
+          "deleted_relationships": {
+            "type": "integer",
+            "nullable": true
+          }
+        },
+        "required": [
+          "success",
+          "message"
+        ]
+      },
+      "RelationshipItem": {
+        "type": "object",
+        "properties": {
+          "target_uuid": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "type": {
+            "type": "string",
+            "description": "Uppercase alphanumeric relationship type"
+          },
+          "properties": {
+            "type": "object",
+            "default": {}
+          }
+        },
+        "required": [
+          "target_uuid",
+          "type"
+        ]
+      },
+      "NodeCreate": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "labels": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Graph labels (e.g., Person, Organization)",
+            "default": []
+          },
+          "data": {
+            "type": "object",
+            "description": "Full payload of the node",
+            "default": {}
+          },
+          "relationships": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RelationshipItem"
+            },
+            "default": []
+          }
+        },
+        "required": [
+          "name"
+        ]
+      },
+      "NodeUpdate": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "labels": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "default": []
+          },
+          "data": {
+            "type": "object",
+            "default": {}
+          },
+          "relationships": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RelationshipItem"
+            },
+            "default": []
+          }
+        },
+        "required": [
+          "name"
+        ]
+      },
+      "NodeMerge": {
+        "type": "object",
+        "description": "Schema for merge_node operation",
+        "properties": {
+          "iroko_uuid": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "name": {
+            "type": "string"
+          },
+          "labels": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "default": []
+          },
+          "data": {
+            "type": "object",
+            "default": {}
+          },
+          "relationships": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RelationshipItem"
+            },
+            "default": []
+          }
+        }
+      },
+      "NodeResponse": {
+        "type": "object",
+        "properties": {
+          "iroko_uuid": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "labels": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "data": {
+            "type": "object"
+          },
+          "relationships": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RelationshipItem"
+            }
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          }
+        },
+        "required": [
+          "iroko_uuid",
+          "name",
+          "labels",
+          "data",
+          "relationships"
+        ]
+      },
+      "SyncRequest": {
+        "type": "object",
+        "properties": {
+          "direction": {
+            "type": "string",
+            "enum": [
+              "to-graph",
+              "from-graph"
+            ]
+          },
+          "batch_size": {
+            "type": "integer",
+            "default": 500,
+            "minimum": 1,
+            "maximum": 5000
+          },
+          "since": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          }
+        },
+        "required": [
+          "direction"
+        ]
+      },
+      "SyncStatus": {
+        "type": "object",
+        "properties": {
+          "pg_node_count": {
+            "type": "integer"
+          },
+          "graph_node_count": {
+            "type": "integer"
+          },
+          "pg_updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "graph_updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "last_sync_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "last_sync_direction": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "QuestionType": {
+        "type": "string",
+        "enum": [
+          "boolean",
+          "number",
+          "select"
+        ]
+      },
+      "Answer": {
+        "type": "object",
+        "properties": {
+          "result": {
+            "oneOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "nullable": true
+          },
+          "recommendation": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "nullable": true
+          },
+          "user_id": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          }
+        }
+      },
+      "Question": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "type": {
+            "$ref": "#/components/schemas/QuestionType"
+          },
+          "desc": {
+            "type": "string"
+          },
+          "min": {
+            "type": "number",
+            "nullable": true
+          },
+          "max": {
+            "type": "number",
+            "nullable": true
+          },
+          "selectOptions": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "label": {
+                  "type": "string"
+                },
+                "value": {
+                  "type": "string"
+                }
+              }
+            },
+            "nullable": true
+          },
+          "answer": {
+            "$ref": "#/components/schemas/Answer",
+            "nullable": true
+          }
+        },
+        "required": [
+          "id",
+          "type",
+          "desc"
+        ]
+      },
+      "Category": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string",
+            "nullable": true
+          },
+          "questions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "default": []
+          },
+          "answer": {
+            "$ref": "#/components/schemas/Answer",
+            "nullable": true
+          }
+        },
+        "required": [
+          "title",
+          "id"
+        ]
+      },
+      "Section": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string",
+            "nullable": true
+          },
+          "categories": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Category"
+            },
+            "default": []
+          },
+          "answer": {
+            "$ref": "#/components/schemas/Answer",
+            "nullable": true
+          }
+        },
+        "required": [
+          "title",
+          "id"
+        ]
+      },
+      "Methodology": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "entity": {
+            "type": "string",
+            "description": "Node type (Source, Organization, Person, etc.)"
+          },
+          "rules": {
+            "type": "string",
+            "nullable": true,
+            "description": "Python module of rule implementations"
+          },
+          "sections": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Section"
+            }
+          },
+          "answer": {
+            "$ref": "#/components/schemas/Answer",
+            "nullable": true
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "version",
+          "description",
+          "entity",
+          "sections"
+        ]
+      },
+      "EvaluationResult": {
+        "type": "object",
+        "properties": {
+          "methodology": {
+            "$ref": "#/components/schemas/Methodology"
+          },
+          "node_id": {
+            "type": "string"
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "user_id": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "is_complete": {
+            "type": "boolean",
+            "default": false
+          },
+          "is_finalized": {
+            "type": "boolean",
+            "default": false
+          },
+          "question_data": {
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/Question"
+            }
+          }
+        },
+        "required": [
+          "methodology",
+          "node_id",
+          "timestamp"
+        ]
+      },
+      "StoredEvaluation": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "node_id": {
+            "type": "string"
+          },
+          "user_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "user": {
+            "$ref": "#/components/schemas/UserResponse",
+            "nullable": true
+          },
+          "methodology_id": {
+            "type": "string"
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "evaluation_data": {
+            "$ref": "#/components/schemas/EvaluationResult"
+          },
+          "is_complete": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "node_id",
+          "user_id",
+          "methodology_id",
+          "timestamp",
+          "evaluation_data",
+          "is_complete"
+        ]
+      },
+      "TaskStatus": {
+        "type": "string",
+        "enum": [
+          "pending",
+          "running",
+          "completed",
+          "failed",
+          "cancelled"
+        ]
+      },
+      "TaskExecution": {
+        "type": "object",
+        "properties": {
+          "execution_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "task_id": {
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/TaskStatus"
+          },
+          "started_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "completed_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "error_message": {
+            "type": "string",
+            "nullable": true
+          },
+          "execution_log": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "results": {
+            "type": "object"
+          }
+        },
+        "required": [
+          "execution_id",
+          "task_id",
+          "status",
+          "started_at"
+        ]
+      },
+      "CrawlerStats": {
+        "type": "object",
+        "properties": {
+          "total_tasks": {
+            "type": "integer"
+          },
+          "active_tasks": {
+            "type": "integer"
+          },
+          "successful_executions": {
+            "type": "integer"
+          },
+          "failed_executions": {
+            "type": "integer"
+          },
+          "last_execution": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          }
+        },
+        "required": [
+          "total_tasks",
+          "active_tasks",
+          "successful_executions",
+          "failed_executions"
+        ]
+      }
+    }
+  }
+}

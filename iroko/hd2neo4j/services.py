@@ -11,8 +11,8 @@ logger = logging.getLogger('iroko-cris.hd2neo4j')
 
 
 class RepositoryService:
-    def __init__(self, neo4j_uri:str, neo4j_user:str, neo4j_pass:str, neo4j_db:str):
-        self.repository = Neo4jRepository(neo4j_uri, neo4j_user, neo4j_pass, neo4j_db)
+    def __init__(self, neo4j_uri:str, neo4j_user:str, neo4j_pass:str, neo4j_db:str, pg_url: str = None):
+        self.repository = Neo4jRepository(neo4j_uri, neo4j_user, neo4j_pass, neo4j_db, pg_url=pg_url)
         
     def get_repository(self):
         return self.repository

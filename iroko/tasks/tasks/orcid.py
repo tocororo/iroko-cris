@@ -8,6 +8,7 @@ from pathlib import Path
 from lxml import etree
 import shutil
 
+from uuid import UUID
 import uuid
 import xml.etree.ElementTree as ET
 
@@ -17,6 +18,8 @@ import pycountry
 from iroko.tasks.schemas import TaskExecution
 from iroko.tasks.task import CrawlerTask
 from iroko.storage import neo4j_db
+from iroko.database import AsyncSessionLocal
+from iroko.nodes.service import NodeService
 
 
 import asyncio
@@ -61,12 +64,11 @@ class OrcidDumpProcessingTask(CrawlerTask):
         self.logger.info(f"Output directory created/verified: {self.output_path}")
             
         try:
-            # Get Neo4j session for database operations
             session = neo4j_db.get_session()
-            
-            # Process all ORCID files in the dump structure
-            results = await self._process_orcid_dump(session)
-            
+            async with AsyncSessionLocal() as pg_session:
+                service = NodeService(pg_session, session)
+                results = await self._process_orcid_dump(service)
+
             self.logger.info(
                 f"ORCID processing completed. Processed {self.processed_count} records, "
                 f"found {self.cuban_researchers_count} Cuban researchers"
@@ -86,7 +88,7 @@ class OrcidDumpProcessingTask(CrawlerTask):
                 self.logger.error(f"Failed to write output file {self.output_json}: {e}")
                 raise
             return output
-            
+
         except Exception as e:
             self.logger.error(f"Error executing ORCID processing task: {str(e)}")
             raise
@@ -117,33 +119,20 @@ class OrcidDumpProcessingTask(CrawlerTask):
             
         return True
     
-    async def _process_orcid_dump(self, session) -> Dict[str, Any]:
-        """
-        Process the entire ORCID dump folder structure.
-        The structure follows ORCID's pattern with folders 000-999 based on last digits.
-        """
+    async def _process_orcid_dump(self, service: NodeService) -> Dict[str, Any]:
         base_path = Path(self.base_path)
-        results = {
-            "total_files_processed": 0,
-            "cuban_researchers": [],
-            "saved_files": [],
-            "errors": []
-        }
+        results = {"total_files_processed": 0, "cuban_researchers": [], "saved_files": [], "errors": []}
         
-        # ORCID dump structure has folders 000, 001, ..., 999 
-        # for folder_name in [f"{i:03d}" for i in range(1000)]:
         for folder_name in os.listdir(base_path):
             folder_path = base_path / folder_name
-            
             if not folder_path.exists():
                 continue
                 
             self.logger.debug(f"Processing folder: {folder_name}")
             
-            # Process each XML file in the folder
             for xml_file in folder_path.glob("*.xml"):
                 try:
-                    await self._process_orcid_file(xml_file, session, results)
+                    await self._process_orcid_file(xml_file, service, results)
                 except Exception as e:
                     error_msg = f"Error processing file {xml_file}: {str(e)}"
                     self.logger.error(error_msg)
@@ -151,19 +140,13 @@ class OrcidDumpProcessingTask(CrawlerTask):
         
         return results
     
-    async def _process_orcid_file(self, xml_file: Path, session, results: Dict[str, Any]):
-        """
-        Process a single ORCID XML file and check if it belongs to a Cuban researcher.
-        If it is, save the XML file to the output directory.
-        """
+    async def _process_orcid_file(self, xml_file: Path, service: NodeService, results: Dict[str, Any]):
         self.logger.debug(f"Processing ORCID file: {xml_file}")
         
         try:
-            # Parse XML using lxml 
             tree = etree.parse(str(xml_file))
             root = tree.getroot()
 
-            # Extract ORCID iD from the file 
             orcid_element = root.find(".//{http://www.orcid.org/ns/common}orcid-identifier")
             orcid_id = None
             
@@ -172,12 +155,10 @@ class OrcidDumpProcessingTask(CrawlerTask):
                 if path_element is not None:
                     orcid_id = path_element.text
             
-            # If we can't get ORCID iD from XML, try to extract from filename
             if not orcid_id:
-                orcid_id = xml_file.stem  # Use filename without extension
+                orcid_id = xml_file.stem
             
-            # Check if this record belongs to a Cuban researcher
-            is_cuban_researcher = await self._is_cuban_researcher(root, orcid_id, session)
+            is_cuban_researcher = await self._is_cuban_researcher(root, orcid_id, service.mg)
             
             self.processed_count += 1
             results["total_files_processed"] += 1
@@ -185,7 +166,6 @@ class OrcidDumpProcessingTask(CrawlerTask):
             if is_cuban_researcher:
                 self.cuban_researchers_count += 1
                 
-                # Save the XML file to output directory
                 saved_file_path = await self._save_cuban_researcher_file(xml_file, orcid_id, is_cuban_researcher)
                 
                 researcher_data = {
@@ -198,9 +178,7 @@ class OrcidDumpProcessingTask(CrawlerTask):
                 results["cuban_researchers"].append(researcher_data)
                 results["saved_files"].append(saved_file_path)
                 
-                # Store in Neo4j
-                # await self._store_researcher_in_neo4j(session, orcid_id, researcher_data, 
-                #                                     is_cuban_researcher)
+                await self._store_researcher_in_neo4j(service, orcid_id, researcher_data, is_cuban_researcher)
                 
                 self.logger.info(f"Found Cuban researcher: {orcid_id}, saved to: {saved_file_path}")
                 
@@ -458,38 +436,44 @@ class OrcidDumpProcessingTask(CrawlerTask):
         
         return None
     
-    async def _store_researcher_in_neo4j(self, session, orcid_id: str, 
+    async def _store_researcher_in_neo4j(self, service: NodeService, orcid_id: str, 
                                        researcher_data: Dict[str, Any], 
                                        cuban_indicator: Dict[str, Any]):
-        """
-        Store identified Cuban researcher in Neo4j database.
-        """
-        query = """
-        MERGE (r:Researcher {orcid_id: $orcid_id})
-        SET r.identification_method = $identification_method,
-            r.confidence = $confidence,
-            r.file_path = $file_path,
-            r.saved_file_path = $saved_file_path,
-            r.last_updated = datetime()
-        
-        WITH r
-        UNWIND $cuban_indicators AS indicator
-        MERGE (ci:CubanIndicator {type: indicator.method})
-        MERGE (r)-[rel:HAS_INDICATOR]->(ci)
-        SET rel.details = indicator.details,
-            rel.confidence = indicator.confidence
-        """
-        
-        parameters = {
-            "orcid_id": orcid_id,
-            "identification_method": cuban_indicator["method"],
-            "confidence": cuban_indicator.get("confidence", "medium"),
-            "file_path": researcher_data["file_path"],
-            "saved_file_path": researcher_data["saved_file_path"],
-            "cuban_indicators": [cuban_indicator]  # Can be expanded for multiple indicators
-        }
-        
-        await session.run(query, parameters)
+        # Lookup existing researcher by orcid_id
+        result = await service.mg.run(
+            "MATCH (r:Researcher {orcid_id: $id}) RETURN r.iroko_uuid as uuid",
+            id=orcid_id)
+        rec = await result.single()
+        existing_uuid = UUID(rec["uuid"]) if rec else None
+
+        r_node = await service.merge_node(
+            iroko_uuid=existing_uuid,
+            name=orcid_id,
+            labels=['Researcher'],
+            data={
+                'orcid_id': orcid_id,
+                'identification_method': cuban_indicator["method"],
+                'confidence': cuban_indicator.get("confidence", "medium"),
+                'file_path': researcher_data["file_path"],
+                'saved_file_path': researcher_data["saved_file_path"],
+            })
+
+        indicator = cuban_indicator
+        result = await service.mg.run(
+            "MATCH (ci:CubanIndicator {type: $t}) RETURN ci.iroko_uuid as uuid",
+            t=indicator["method"])
+        rec = await result.single()
+        ci_uuid = UUID(rec["uuid"]) if rec else None
+
+        ci_node = await service.merge_node(
+            iroko_uuid=ci_uuid,
+            name=indicator["method"],
+            labels=['CubanIndicator'],
+            data={'type': indicator["method"]})
+
+        await service.merge_relationship(
+            r_node.iroko_uuid, ci_node.iroko_uuid, "HAS_INDICATOR",
+            {'details': indicator.get("details"), 'confidence': indicator.get("confidence")})
     
     def get_dependencies(self) -> List[str]:
         """
@@ -1330,30 +1314,29 @@ class OrcidMappingTask(CrawlerTask):
         self.no_orcid = []
         
         try:
-            for idx, filename in enumerate(json_files):
-                self.logger.info(f"Ingesting file {idx + 1}/{total_files}: {filename}")
-                input_path = os.path.join(self.output_folder, filename)
+            session = neo4j_db.get_session()
+            async with AsyncSessionLocal() as pg_session:
+                service = NodeService(pg_session, session)
+                for idx, filename in enumerate(json_files):
+                    self.logger.info(f"Ingesting file {idx + 1}/{total_files}: {filename}")
+                    input_path = os.path.join(self.output_folder, filename)
 
-                with open(input_path, 'r', encoding='utf-8') as f:
-                    person_data = json.load(f)
+                    with open(input_path, 'r', encoding='utf-8') as f:
+                        person_data = json.load(f)
 
-                # Upsert Person node
-                person_identifiers = person_data.get('identifiers', [])
-                orcid_id = next((id_obj['value'] for id_obj in person_identifiers if id_obj.get('idtype') == 'orcid'), None)
+                    person_identifiers = person_data.get('identifiers', [])
+                    orcid_id = next((id_obj['value'] for id_obj in person_identifiers if id_obj.get('idtype') == 'orcid'), None)
 
-                if not orcid_id:
-                    self.logger.warning(f"No ORCID found in {filename}, skipping ingestion.")
-                    self.no_orcid.append({"file": filename, "orcid": orcid_id})
-                    continue
-                
-                try:
-                    async with neo4j_db.get_session() as session:
-                        await session.execute_write(
-                        self._ingest_person_unit_of_work, person_data, orcid_id
-                    )
-                except Exception as e:
-                    self.logger.error(f"Failed to ingest {filename} within a transaction. Rolling back. Error: {e}", exc_info=True)
-                    await self._copy_failed_file(input_path, filename, self.failed_folder)
+                    if not orcid_id:
+                        self.logger.warning(f"No ORCID found in {filename}, skipping ingestion.")
+                        self.no_orcid.append({"file": filename, "orcid": orcid_id})
+                        continue
+
+                    try:
+                        await self._ingest_person_unit_of_work(service, person_data, orcid_id)
+                    except Exception as e:
+                        self.logger.error(f"Failed to ingest {filename}. Error: {e}", exc_info=True)
+                        await self._copy_failed_file(input_path, filename, self.failed_folder)
 
             # Save created organizations to files
             self._save_new_nodes_to_file()
@@ -1361,27 +1344,20 @@ class OrcidMappingTask(CrawlerTask):
         except Exception as e:
             self.logger.error(f"Failed to start ingest ", exc_info=True)
 
-    async def _ingest_person_unit_of_work(self, tx, person_data, orcid_id):
-        """
-        Executes all database operations for a single person inside one transaction.
-        The 'tx' object is passed automatically by session.execute_write.
-        """
+    async def _ingest_person_unit_of_work(self, service: NodeService, person_data, orcid_id):
         country = person_data.get('country')
         if country and country.get('code'):
-            # 1. Create the Person node.
-            await self._process_person_properties(tx, person_data, orcid_id)
-
-            # 2. Process all related nodes and relationships.
-            await self._process_identifiers(tx, person_data, orcid_id)
-            await self._process_keywords(tx, person_data, orcid_id)
+            await self._process_person_properties(service, person_data, orcid_id)
+            await self._process_identifiers(service, person_data, orcid_id)
+            await self._process_keywords(service, person_data, orcid_id)
 
             affiliations = person_data.get('affiliations', [])
             for affiliation in affiliations:
-                await self._create_or_link_affiliation(tx, person_data, affiliation, orcid_id)
+                await self._create_or_link_affiliation(service, person_data, affiliation, orcid_id)
 
             peer_reviews = person_data.get('peer-review', [])
             for review in peer_reviews:
-                await self._create_or_link_peer_review(tx, person_data, review, orcid_id)
+                await self._create_or_link_peer_review(service, person_data, review, orcid_id)
         else:
             input_path = os.path.join(self.input_folder, f'{orcid_id}.xml')
             await self._copy_failed_file(input_path, f'{orcid_id}.xml', self.no_country_folder)
@@ -1404,10 +1380,17 @@ class OrcidMappingTask(CrawlerTask):
         except Exception as e:
             self.logger.error(f"An unexpected error occurred while moving file '{filename}'. Error: {e}", exc_info=True)
 
-    async def _process_identifiers(self, session, person_data, orcid_id):
-        """Process person identifiers and create Identifier nodes."""
+    async def _process_identifiers(self, service: NodeService, person_data, orcid_id):
         person_identifiers = person_data.get('identifiers', [])
         
+        # Get Person node uuid
+        result = await service.mg.run(
+            "MATCH (p:Person {orcid: $id}) RETURN p.iroko_uuid as uuid", id=orcid_id)
+        rec = await result.single()
+        person_uuid = UUID(rec["uuid"]) if rec else None
+        if not person_uuid:
+            return
+
         for identifier in person_identifiers:
             idtype = identifier.get('idtype')
             value = identifier.get('value')
@@ -1417,58 +1400,47 @@ class OrcidMappingTask(CrawlerTask):
             
             if not idtype or not value:
                 continue
-                
-            # Create or merge Identifier node
-            query = """
-            MERGE (i:Identifier {idtype: $idtype, value: $value}) 
-            """
-            if name != '':
-                query += """ 
-                ON MATCH SET i.name=$name
-                """
-            if url != '':
-                query += """ 
-                ON MATCH SET i.url=$url
-                """
-            query += """
-            WITH i
-            MATCH (p:Person {orcid: $orcid_id})
-            MERGE (p)-[r:HAS_IDENTIFIER]->(i)
-            SET r.relationship = $relationship
-            """
-            result = await session.run(query, idtype=idtype, value=value, 
-                            orcid_id=orcid_id, relationship=relationship, name=name, url=url)
-            await result.consume()
 
-    async def _process_person_properties(self, session, person_data, orcid_id):
-        """Process basic person properties excluding keywords, affiliations and peer_review."""
-        query = """
-        MERGE (p:Person {orcid: $orcid_id})
-        ON CREATE SET p.iroko_uuid = randomUUID(), p.created = datetime()
-        ON MATCH SET p.updated = datetime()
-        SET p.name = $name,
-            p.given_name = $given_name,
-            p.family_name = $family_name,
-            p.biography = $biography,
-            p.public = $public
-        """
-        
-        params = {
-            'orcid_id': orcid_id,
+            # Lookup existing Identifier node
+            result = await service.mg.run(
+                "MATCH (i:Identifier {idtype: $t, value: $v}) RETURN i.iroko_uuid as uuid",
+                t=idtype, v=value)
+            rec = await result.single()
+            ident_uuid = UUID(rec["uuid"]) if rec else None
+
+            data = {'idtype': idtype, 'value': value}
+            if name: data['name'] = name
+            if url: data['url'] = url
+
+            ident_node = await service.merge_node(
+                iroko_uuid=ident_uuid, name=value, labels=['Identifier'], data=data)
+
+            await service.merge_relationship(
+                person_uuid, ident_node.iroko_uuid, "HAS_IDENTIFIER",
+                {"relationship": relationship})
+
+    async def _process_person_properties(self, service: NodeService, person_data, orcid_id):
+        # Lookup existing Person by orcid
+        result = await service.mg.run(
+            "MATCH (p:Person {orcid: $id}) RETURN p.iroko_uuid as uuid", id=orcid_id)
+        rec = await result.single()
+        existing_uuid = UUID(rec["uuid"]) if rec else None
+
+        data = {
+            'orcid': orcid_id,
             'name': person_data.get('name'),
             'given_name': person_data.get('given_name'),
             'family_name': person_data.get('family_name'),
             'biography': person_data.get('biography'),
-            'public': person_data.get('public', False)
+            'public': person_data.get('public', False),
         }
-        
-        result = await session.run(query, **params)
-        await result.consume()
+        person_node = await service.merge_node(
+            iroko_uuid=existing_uuid, name=person_data.get('name') or orcid_id,
+            labels=['Person'], data=data)
 
-        # Process country
         country = person_data.get('country')
         if country and country.get('code'):
-            await self._link_country_to_person(session, orcid_id, country)
+            await self._link_country_to_person(service, str(person_node.iroko_uuid), country)
         
         # Process addresses
         # addresses = person_data.get('addresses', [])
@@ -1482,104 +1454,82 @@ class OrcidMappingTask(CrawlerTask):
 
         DELIMITERS = r'[,;\n\r]+'
 
+        # Get Person node uuid
+        result = await service.mg.run(
+            "MATCH (p:Person {orcid: $id}) RETURN p.iroko_uuid as uuid", id=orcid_id)
+        rec = await result.single()
+        person_uuid = UUID(rec["uuid"]) if rec else None
+        if not person_uuid:
+            return
+
         for keyword in keywords:
             if not keyword:
                 continue
             sub_keywords = [kw.strip() for kw in re.split(DELIMITERS, keyword) if kw.strip()]
             for sub_keyword in sub_keywords:
-                query = """
-                MERGE (t:Term:Keyword {name: $keyword})
-                ON CREATE SET t.iroko_uuid = randomUUID(), t.vocabulary = 'keyword', t.created = datetime()
-                ON MATCH SET t.updated = datetime()
-                WITH t
-                MATCH (p:Person {orcid: $orcid_id})
-                MERGE (p)-[r:HAS_KEYWORD]->(t)
-                """
-                result = await session.run(query, keyword=sub_keyword, orcid_id=orcid_id)
-                await result.consume()
+                result = await service.mg.run(
+                    "MATCH (t:Term:Keyword {name: $n}) RETURN t.iroko_uuid as uuid", n=sub_keyword)
+                rec = await result.single()
+                kw_uuid = UUID(rec["uuid"]) if rec else None
 
-    async def _create_or_link_affiliation(self, session, person_data, affiliation, orcid_id):
-        """Create or link affiliation relationship between person and organization."""
+                kw_node = await service.merge_node(
+                    iroko_uuid=kw_uuid, name=sub_keyword,
+                    labels=['Term', 'Keyword'],
+                    data={'vocabulary': 'keyword'})
+
+                await service.merge_relationship(person_uuid, kw_node.iroko_uuid, "HAS_KEYWORD")
+
+    async def _create_or_link_affiliation(self, service: NodeService, person_data, affiliation, orcid_id):
         org_name = affiliation.get('name')
         if not org_name:
             return
 
-        organization_node = await self._find_or_create_organization(session, affiliation)
-        
-        # if no orcid is provided then just create the organization...
-        if orcid_id is None:
-            return 
-    
-        # Create affiliation relationship
-        affiliation_type = affiliation.get('affiliation_type', '').replace('-', '_').upper() + '_IN'
-        
-        params = {
-            'orcid_id': orcid_id,
-            'org_uuid': organization_node['iroko_uuid'],
-            'roles': affiliation.get('roles') if affiliation.get('roles') else None,
-            'start_date': affiliation.get('start_date') if affiliation.get('start_date') else None,
-            'end_date': affiliation.get('end_date') if affiliation.get('end_date') else None,
-            'department_name': affiliation.get('department_name') if affiliation.get('department_name') else None
+        organization_node = await self._find_or_create_organization(service, affiliation)
+        if not organization_node or orcid_id is None:
+            return
+
+        result = await service.mg.run(
+            "MATCH (p:Person {orcid: $id}) RETURN p.iroko_uuid as uuid", id=orcid_id)
+        rec = await result.single()
+        person_uuid = UUID(rec["uuid"]) if rec else None
+        if not person_uuid:
+            return
+
+        rel_type = affiliation.get('affiliation_type', '').replace('-', '_').upper() + '_IN'
+        props = {
+            'roles': affiliation.get('roles'),
+            'start_date': affiliation.get('start_date'),
+            'end_date': affiliation.get('end_date'),
+            'department_name': affiliation.get('department_name'),
         }
+        props = {k: v for k, v in props.items() if v is not None}
 
-        # First check if relationship already exists with the same properties
-        check_query = """
-        MATCH (p:Person {orcid: $orcid_id})-[r:""" + affiliation_type + """]->(o:Organization {iroko_uuid: $org_uuid})
-        WHERE 
-            (r.roles IS NULL AND $roles IS NULL OR r.roles = $roles) AND
-            (r.start_date IS NULL AND $start_date IS NULL OR r.start_date = $start_date) AND
-            (r.end_date IS NULL AND $end_date IS NULL OR r.end_date = $end_date) AND
-            (r.department_name IS NULL AND $department_name IS NULL OR r.department_name = $department_name)
-        RETURN r
-        """
+        await service.merge_relationship(person_uuid, UUID(organization_node['iroko_uuid']), rel_type, props)
 
-        result = await session.run(check_query, **params)
-        existing = await result.single()
-
-        if not existing:
-            # Create new relationship since it doesn't exist
-            create_query = """
-            MATCH (p:Person {orcid: $orcid_id})
-            MATCH (o:Organization {iroko_uuid: $org_uuid})
-            CREATE (p)-[r:""" + affiliation_type + """]->(o)
-            SET r.roles = $roles,
-                r.start_date = $start_date,
-                r.end_date = $end_date,
-                r.department_name = $department_name
-            """
-            await session.run(create_query, **params)
-            await result.consume()
-
-    async def _find_or_create_organization(self, session, affiliation):
+    async def _find_or_create_organization(self, service: NodeService, affiliation):
         org_name = affiliation.get('name')
         if not org_name:
             return
 
-        # Normalize organization name for comparison
         normalized_name = (unicodedata.normalize('NFKD', org_name.lower())
                    .encode('ascii', 'ignore')
                    .decode('ascii')
                    .translate(str.maketrans('', '', string.punctuation + ' ')))
         
-        # Try to find existing organization by identifiers first
-        organization_node = await self._find_organization_by_identifiers(session, affiliation.get('identifiers', []))
+        organization_node = await self._find_organization_by_identifiers(service.mg, affiliation.get('identifiers', []))
         
         if not organization_node:
-            # Try to find by name in Neo4j
-            organization_node = await self._find_organization_by_name(session, org_name, normalized_name)
+            organization_node = await self._find_organization_by_name(service.mg, org_name, normalized_name)
             
         if not organization_node:
-            # Try to find in DIUNE data
-            organization_node = await self._find_organization_in_diune(session, org_name, normalized_name)
+            organization_node = await self._find_organization_in_diune(service, org_name, normalized_name)
             
         if not organization_node:
-            # Create new organization
-            organization_node = await self._create_new_organization(session, org_name, affiliation)
+            organization_node = await self._create_new_organization(service, org_name, affiliation)
         
-        # ensure link to country
         country = affiliation.get('country')
         if country and country.get('code'):
-            await self._link_country_to_organization(session, organization_node['iroko_uuid'], country)
+            await self._link_country_to_organization(service, organization_node['iroko_uuid'], country)
         
         return organization_node
     
@@ -1614,50 +1564,43 @@ class OrcidMappingTask(CrawlerTask):
         record = await result.single()
         return dict(record) if record else None
 
-    async def _find_organization_in_diune(self, session, org_name, normalized_name):
-        """Find organization in DIUNE data and create it if found."""
+    async def _find_organization_in_diune(self, service: NodeService, org_name, normalized_name):
         diune_match = self.diune_df[self.diune_df['descripcion_lower'] == normalized_name]
         
         if not diune_match.empty:
             diune_row = diune_match.iloc[0]
-            org_uuid = str(uuid.uuid4())
-            
-            query = """
-            CREATE (o:Organization {
-                iroko_uuid: $iroko_uuid,
-                name: $name,
-                descripcion: $descripcion,
-                descripcion_nae: $descripcion_nae,
-                descripcion_cnae: $descripcion_cnae,
-                forma_organizativa: $forma_organizativa
-            })
-            RETURN o.iroko_uuid as iroko_uuid, o.name as name
-            """
-            
-            result = await session.run(query,
-                iroko_uuid=org_uuid,
+            data = {
+                'descripcion': diune_row['descripcion'],
+                'descripcion_nae': diune_row.get('descripcion_nae'),
+                'descripcion_cnae': diune_row.get('descripcion_cnae'),
+                'forma_organizativa': diune_row.get('desfo'),
+            }
+            node = await service.merge_node(
                 name=diune_row['descripcion'],
-                descripcion=diune_row['descripcion'],
-                descripcion_nae=diune_row.get('descripcion_nae'),
-                descripcion_cnae=diune_row.get('descripcion_cnae'),
-                forma_organizativa=diune_row.get('desfo')
-            )
-            
-            # link to Cuba
-            await self._link_country_to_organization(session, org_uuid, {"code": "cu", "name": "Cuba"})
+                labels=['Organization'],
+                data=data)
+
+            await self._link_country_to_organization(
+                service, str(node.iroko_uuid), {"code": "cu", "name": "Cuba"})
 
             # Create ONEI identifier
-            identifier_query = """
-            MATCH (o:Organization {iroko_uuid: $org_uuid})
-            MERGE (i:Identifier {idtype: 'onei', value: $value})
-            MERGE (o)-[:HAS_IDENTIFIER]->(i)
-            """
             onei_value = f"onei.diune.{diune_row['codigo']}"
-            result = await session.run(identifier_query, org_uuid=org_uuid, value=onei_value)
-            
-            # Store for JSON output
+            result = await service.mg.run(
+                "MATCH (i:Identifier {idtype: 'onei', value: $v}) RETURN i.iroko_uuid as uuid",
+                v=onei_value)
+            rec = await result.single()
+            ident_uuid = UUID(rec["uuid"]) if rec else None
+
+            ident_node = await service.merge_node(
+                iroko_uuid=ident_uuid, name=onei_value,
+                labels=['Identifier'],
+                data={'idtype': 'onei', 'value': onei_value})
+
+            await service.merge_relationship(
+                node.iroko_uuid, ident_node.iroko_uuid, "HAS_IDENTIFIER")
+
             self.created_diune_orgs.append({
-                'iroko_uuid': org_uuid,
+                'iroko_uuid': str(node.iroko_uuid),
                 'name': diune_row['descripcion'],
                 'descripcion': diune_row['descripcion'],
                 'descripcion_nae': diune_row.get('descripcion_nae'),
@@ -1665,140 +1608,99 @@ class OrcidMappingTask(CrawlerTask):
                 'forma_organizativa': diune_row.get('desfo'),
                 'onei_identifier': onei_value
             })
-            
-            record = await result.single()
-            return dict(record) if record else None
+
+            return {'iroko_uuid': str(node.iroko_uuid), 'name': diune_row['descripcion']}
             
         return None
 
-    async def _create_new_organization(self, session, org_name, affiliation):
-        """Create a new organization with the given data."""
-        org_uuid = str(uuid.uuid4())
-        
-        query = """
-        CREATE (o:Organization {
-            iroko_uuid: $iroko_uuid,
-            name: $name
-        })
-        RETURN o.iroko_uuid as iroko_uuid, o.name as name
-        """
-        
-        result = await session.run(query,
-            iroko_uuid=org_uuid,
+    async def _create_new_organization(self, service: NodeService, org_name, affiliation):
+        node = await service.merge_node(
             name=org_name,
-        )
-        record = await result.single()
-        
-        # link to country
+            labels=['Organization'],
+            data={'name': org_name})
+
         country = affiliation.get('country')
         if country and country.get('code'):
-            await self._link_country_to_organization(session, org_uuid, country)
-        
-        # Process organization identifiers
+            await self._link_country_to_organization(service, str(node.iroko_uuid), country)
+
         identifiers = affiliation.get('identifiers', [])
         for identifier in identifiers:
             if identifier.get('idtype') and identifier.get('value'):
-                identifier_query = """
-                MATCH (o:Organization {iroko_uuid: $org_uuid})
-                MERGE (i:Identifier {idtype: $idtype, value: $value})
-                MERGE (o)-[:HAS_IDENTIFIER]->(i)
-                """
-                result = await session.run(identifier_query,
-                    org_uuid=org_uuid,
-                    idtype=identifier['idtype'],
-                    value=identifier['value']
-                )
-                await result.consume()
-        
-        # Store for JSON output
+                result = await service.mg.run(
+                    "MATCH (i:Identifier {idtype: $t, value: $v}) RETURN i.iroko_uuid as uuid",
+                    t=identifier['idtype'], v=identifier['value'])
+                rec = await result.single()
+                ident_uuid = UUID(rec["uuid"]) if rec else None
+
+                ident_node = await service.merge_node(
+                    iroko_uuid=ident_uuid, name=identifier['value'],
+                    labels=['Identifier'],
+                    data={'idtype': identifier['idtype'], 'value': identifier['value']})
+
+                await service.merge_relationship(
+                    node.iroko_uuid, ident_node.iroko_uuid, "HAS_IDENTIFIER")
+
         org_data = {
-            'iroko_uuid': org_uuid,
+            'iroko_uuid': str(node.iroko_uuid),
             'name': org_name,
             'country': country,
             'identifiers': identifiers
         }
         self.created_new_orgs.append(org_data)
         
-        
-        return dict(record) if record else None
+        return {'iroko_uuid': str(node.iroko_uuid), 'name': org_name}
 
-    async def _create_or_link_peer_review(self, session, person_data, review, orcid_id):
-        """Create or link peer review relationship between person and publication."""
-        
-        # Process convening organization if present
+    async def _create_or_link_peer_review(self, service: NodeService, person_data, review, orcid_id):
         organization = review.get('organization')
         org_node = None
         if organization:
             org_name = organization.get('name')
             if org_name:
-                # Create temporary affiliation structure for organization processing
                 temp_affiliation = {
                     'name': org_name,
                     'identifiers': organization.get('identifiers', []),
                     "affiliation_type": "reviewer"
                 }
-                org_node = await self._find_or_create_organization(session, temp_affiliation)
+                org_node = await self._find_or_create_organization(service, temp_affiliation)
         
-        # Find or create publication
-        publication_node = await self._find_or_create_publication(session, review, org_node)
-        
+        publication_node = await self._find_or_create_publication(service, review, org_node)
         if not publication_node:
             return
-            
-        # Create peer review relationship
+
+        result = await service.mg.run(
+            "MATCH (p:Person {orcid: $id}) RETURN p.iroko_uuid as uuid", id=orcid_id)
+        rec = await result.single()
+        person_uuid = UUID(rec["uuid"]) if rec else None
+        if not person_uuid:
+            return
+
         roles = review.get('roles', [])
         if not roles:
             return
-            
         for role in roles:
-            relationship_type = role.upper() + '_IN'
-            
-            query = """
-            MATCH (p:Person {orcid: $orcid_id})
-            MATCH (pub:Publication {iroko_uuid: $pub_uuid})
-            MERGE (p)-[r:""" + relationship_type + """]->(pub)
-            SET r.roles = $roles,
-                r.start_date = $start_date,
-                r.end_date = $end_date
-            """
-            
-            params = {
-                'orcid_id': orcid_id,
-                'pub_uuid': publication_node['iroko_uuid'],
-                'roles': roles,
-                'start_date': review.get('start_date'),
-                'end_date': review.get('end_date')
-            }
-            
-            result = await session.run(query, **params)
-            await result.consume()
+            rel_type = role.upper() + '_IN'
+            await service.merge_relationship(
+                person_uuid, UUID(publication_node['iroko_uuid']), rel_type,
+                {'roles': roles, 'start_date': review.get('start_date'), 'end_date': review.get('end_date')})
 
-    async def _find_or_create_publication(self, session, review, org_node):
-        """Find or create publication node."""
-        # Try to find by identifiers first
+    async def _find_or_create_publication(self, service: NodeService, review, org_node):
         identifiers = review.get('identifiers', [])
-        publication_node = await self._find_publication_by_identifiers(session, identifiers)
-        
+        publication_node = await self._find_publication_by_identifiers(service.mg, identifiers)
         if publication_node:
             return publication_node
-            
-        # If not found, try to fetch from ISSN API
+
         issn_identifier = next((id_obj for id_obj in identifiers if id_obj.get('idtype') == 'issn'), None)
-        
         if issn_identifier:
             publication_data = await self._fetch_publication_from_issn(issn_identifier['value'])
             if publication_data:
-                return await self._create_publication_from_issn_data(session, publication_data, identifiers, review, org_node)
-        
-        # If no ISSN or API failed, create with available data
-        return await self._create_publication_from_review(session, review, org_node)
+                return await self._create_publication_from_issn_data(service, publication_data, identifiers, review, org_node)
+
+        return await self._create_publication_from_review(service, review, org_node)
 
     async def _find_publication_by_identifiers(self, session, identifiers):
-        """Find publication by its identifiers."""
         for identifier in identifiers:
             if not identifier.get('idtype') or not identifier.get('value'):
                 continue
-                
             query = """
             MATCH (pub:Publication)-[:HAS_IDENTIFIER]->(i:Identifier {idtype: $idtype, value: $value})
             RETURN pub.iroko_uuid as iroko_uuid, pub.name as name
@@ -1806,16 +1708,13 @@ class OrcidMappingTask(CrawlerTask):
             """
             result = await session.run(query, idtype=identifier['idtype'], value=identifier['value'])
             record = await result.single()
-            
             if record:
                 return dict(record)
         return None
 
     async def _fetch_publication_from_issn(self, issn):
-        """Fetch publication data from ISSN.org API."""
         import httpx
         url = f"https://portal.issn.org/resource/ISSN/{issn}?format=json"
-        
         try:
             async with httpx.AsyncClient() as client:
                 response = await client.get(url, timeout=30.0)
@@ -1823,68 +1722,44 @@ class OrcidMappingTask(CrawlerTask):
                     return response.json()
         except Exception as e:
             self.logger.warning(f"Failed to fetch data from ISSN API for ISSN {issn}: {e}")
-        
         return None
 
-    async def _create_publication_from_issn_data(self, session, issn_data, original_identifiers, review, org_node):
-        """Create publication node from ISSN API data."""
-        pub_uuid = str(uuid.uuid4())
-        
-        # Extract main title from ISSN data
+    async def _create_publication_from_issn_data(self, service, issn_data, original_identifiers, review, org_node):
         main_title = None
         graph_data = issn_data.get('@graph', [])
         for item in graph_data:
             if 'mainTitle' in item:
                 main_title = item['mainTitle']
                 break
-
         if not main_title:
             return None
 
-        # Normalize main_title: handle both string and list cases
         if isinstance(main_title, list):
-            # Optionally filter out non-strings and join
             main_title = " | ".join(str(t) for t in main_title if t is not None)
-        elif isinstance(main_title, str):
-            # Already a string, use as-is
-            pass
-        else:
-            # Unexpected type (e.g., dict, number) — fallback to string representation or skip
+        elif not isinstance(main_title, str):
             main_title = str(main_title)
 
-        query = """
-        CREATE (pub:Publication {
-            iroko_uuid: $iroko_uuid,
-            name: $name
-        })
-        RETURN pub.iroko_uuid as iroko_uuid, pub.name as name
-        """
-        result = await session.run(query,
-            iroko_uuid=pub_uuid,
-            name=main_title
-        )
-        record = await result.single()
-        
-        # Add identifiers
+        pub_node = await service.merge_node(
+            name=main_title, labels=['Publication'], data={})
+
         all_identifiers = original_identifiers.copy()
-        # Add ISSN from the API data if not already present
         if not any(id_obj.get('idtype') == 'issn' for id_obj in all_identifiers):
             all_identifiers.append({'idtype': 'issn', 'value': issn_data.get('@id', '').split('/')[-1]})
-        
+
         for identifier in all_identifiers:
             if identifier.get('idtype') and identifier.get('value'):
-                identifier_query = """
-                MATCH (pub:Publication {iroko_uuid: $pub_uuid})
-                MERGE (i:Identifier {idtype: $idtype, value: $value})
-                MERGE (pub)-[:HAS_IDENTIFIER]->(i)
-                """
-                result = await session.run(identifier_query,
-                    pub_uuid=pub_uuid,
-                    idtype=identifier['idtype'],
-                    value=identifier['value']
-                )
-                await result.consume()
-        
+                result = await service.mg.run(
+                    "MATCH (i:Identifier {idtype: $t, value: $v}) RETURN i.iroko_uuid as uuid",
+                    t=identifier['idtype'], v=identifier['value'])
+                rec = await result.single()
+                ident_uuid = UUID(rec["uuid"]) if rec else None
+                ident_node = await service.merge_node(
+                    iroko_uuid=ident_uuid, name=identifier['value'],
+                    labels=['Identifier'],
+                    data={'idtype': identifier['idtype'], 'value': identifier['value']})
+                await service.merge_relationship(
+                    pub_node.iroko_uuid, ident_node.iroko_uuid, "HAS_IDENTIFIER")
+
         
         # Link to country if found
         country_code = None
@@ -1915,150 +1790,112 @@ class OrcidMappingTask(CrawlerTask):
 
         
         pub = dict(record) if record else None
-        self.created_new_publications.append({'pub': pub, 'identifiers': all_identifiers})
-        return pub
-
-    async def _create_publication_from_review(self, session, review, org_node):
-        """Create publication from review data when no ISSN data is available."""
-        pub_uuid = str(uuid.uuid4())
+        self.created_new_publications.append({'pub': pub_node, 'identifiers': all_identifiers})
         
-        # Use the first identifier value as name fallback
+        # Link country
+        country_code = None
+        country_name = None
+        for item in graph_data:
+            if '@id' in item and 'http://id.loc.gov/vocabulary/countries/' in item['@id']:
+                potential_code = item['@id'].split('/')[-1]
+                potential_name = item.get('label', '')
+                country_code = await self._ensure_country_exists(service, potential_code, potential_name)
+                if country_code:
+                    break
+        if country_code:
+            await self._link_country_to_publication(service, str(pub_node.iroko_uuid), potential_code, potential_name)
+
+        if org_node:
+            org_uuid = org_node.get('iroko_uuid')
+            if org_uuid:
+                await self._link_country_to_organization(service, org_uuid, {"code": "cu", "name": "Cuba"})
+                await service.merge_relationship(pub_node.iroko_uuid, UUID(org_uuid), "SOURCE_CREATED_IN")
+
+        return {'iroko_uuid': str(pub_node.iroko_uuid), 'name': main_title}
+
+    async def _create_publication_from_review(self, service: NodeService, review, org_node):
         identifiers = review.get('identifiers', [])
         name = "Unknown Publication"
         if identifiers:
             name = f"Publication ({identifiers[0].get('value', 'Unknown')})"
-        
-        query = """
-        CREATE (pub:Publication {
-            iroko_uuid: $iroko_uuid,
-            name: $name
-        })
-        RETURN pub.iroko_uuid as iroko_uuid, pub.name as name
-        """
-        
-        result = await session.run(query,
-            iroko_uuid=pub_uuid,
-            name=name
-        )
-        record = await result.single()
-        
-        # Add identifiers
+
+        pub_node = await service.merge_node(name=name, labels=['Publication'], data={})
+
         for identifier in identifiers:
             if identifier.get('idtype') and identifier.get('value'):
-                identifier_query = """
-                MATCH (pub:Publication {iroko_uuid: $pub_uuid})
-                MERGE (i:Identifier {idtype: $idtype, value: $value})
-                MERGE (pub)-[:HAS_IDENTIFIER]->(i)
-                """
-                result = await session.run(identifier_query,
-                    pub_uuid=pub_uuid,
-                    idtype=identifier['idtype'],
-                    value=identifier['value']
-                )
-                await result.consume()
+                result = await service.mg.run(
+                    "MATCH (i:Identifier {idtype: $t, value: $v}) RETURN i.iroko_uuid as uuid",
+                    t=identifier['idtype'], v=identifier['value'])
+                rec = await result.single()
+                ident_uuid = UUID(rec["uuid"]) if rec else None
+                ident_node = await service.merge_node(
+                    iroko_uuid=ident_uuid, name=identifier['value'],
+                    labels=['Identifier'],
+                    data={'idtype': identifier['idtype'], 'value': identifier['value']})
+                await service.merge_relationship(
+                    pub_node.iroko_uuid, ident_node.iroko_uuid, "HAS_IDENTIFIER")
 
-        # Link publication to organization 
         if org_node:
             org_uuid = org_node.get('iroko_uuid')
             if org_uuid:
-                query = """
-                    MATCH (pub:Publication {iroko_uuid: $pub_uuid})
-                    MATCH (o:Organization {iroko_uuid: $org_uuid})
-                    MERGE (pub)-[:SOURCE_CREATED_IN]->(o)
-                    """
-                result = await session.run(query, pub_uuid=pub_uuid, org_uuid=org_uuid)
-                await result.consume()
+                await service.merge_relationship(pub_node.iroko_uuid, UUID(org_uuid), "SOURCE_CREATED_IN")
 
-        
-        pub = dict(record) if record else None
+        pub = {'iroko_uuid': str(pub_node.iroko_uuid), 'name': name}
         self.created_new_publications.append({'pub': pub, 'identifiers': identifiers})
         return pub
 
-    async def _link_country_to_person(self, session, orcid_id, country):
-        """Link country to person."""
+    async def _link_country_to_person(self, service: NodeService, person_uuid: str, country):
         country_code = country.get('code')
         country_name = country.get('name')
-        
         if not country_code:
             return
-            
-        normalized_country_code = await self._ensure_country_exists(session, country_code, country_name)
-        
-        query = """
-        MATCH (p:Person {orcid: $orcid_id})
-        MATCH (c:Country {code: $country_code})
-        MERGE (p)-[:IN_COUNTRY]->(c)
-        """
-        
-        result = await session.run(query, orcid_id=orcid_id, country_code=normalized_country_code)
-        await result.consume()
+        normalized_code = await self._ensure_country_exists(service, country_code, country_name)
+        if normalized_code:
+            await service.merge_relationship(
+                UUID(person_uuid), UUID(normalized_code), "IN_COUNTRY")
 
-    async def _link_country_to_publication(self, session, pub_uuid, country_code, country_name):
-        """Link country to publication."""
+    async def _link_country_to_publication(self, service: NodeService, pub_uuid: str, country_code, country_name):
         if not country_code:
             return
-            
-        normalized_country_code = await self._ensure_country_exists(session, country_code, country_name)
-        
-        query = """
-        MATCH (pub:Publication {iroko_uuid: $pub_uuid})
-        MATCH (c:Country {code: $country_code})
-        MERGE (pub)-[:IN_COUNTRY]->(c)
-        """
-        
-        result = await session.run(query, pub_uuid=pub_uuid, country_code=normalized_country_code)
-        await result.consume()
+        normalized_code = await self._ensure_country_exists(service, country_code, country_name)
+        if normalized_code:
+            await service.merge_relationship(
+                UUID(pub_uuid), UUID(normalized_code), "IN_COUNTRY")
 
-    async def _link_country_to_organization(self, session, org_uuid, country):
-        """Link country to organization."""
+    async def _link_country_to_organization(self, service: NodeService, org_uuid: str, country):
         country_code = country.get('code')
         country_name = country.get('name')
-        
         if not country_code:
             return
-            
-        normalized_country_code = await self._ensure_country_exists(session, country_code, country_name)
-        
-        query = """
-        MATCH (o:Organization {iroko_uuid: $org_uuid})
-        MATCH (c:Country {code: $country_code})
-        MERGE (o)-[:IN_COUNTRY]->(c)
-        """
-        
-        result = await session.run(query, org_uuid=org_uuid, country_code=normalized_country_code)
-        await result.consume()
+        normalized_code = await self._ensure_country_exists(service, country_code, country_name)
+        if normalized_code:
+            await service.merge_relationship(
+                UUID(org_uuid), UUID(normalized_code), "IN_COUNTRY")
 
-    async def _ensure_country_exists(self, session, country_code, country_name):
-        """Ensure country node exists with comprehensive country validation."""
-        
+    async def _ensure_country_exists(self, service: NodeService, country_code, country_name):
         if not country_code:
             return None
         
         original_code = country_code
         original_name = country_name
-        
-        # Normalize country code to 2-letter format using comprehensive validation
         normalized_code, normalized_name = self._normalize_country_code_and_name(country_code, country_name)
-        
-        # Use normalized values
         country_code = normalized_code or original_code
         country_name = normalized_name or original_name
-        
-        # If we still don't have a name, use the code as fallback
         if not country_name:
             country_name = country_code
-        
-        query = """
-        MERGE (c:Country {code: $country_code})
-        ON CREATE SET c.iroko_uuid = randomUUID(), c.name = $country_name
-        ON MATCH SET c.name = $country_name
-        RETURN c.code as code
-        """
-        
-        result = await session.run(query, country_code=country_code, country_name=country_name)
-        await result.consume()
-        
-        return country_code  # Return the normalized 2-letter code
+
+        # Lookup existing country
+        result = await service.mg.run(
+            "MATCH (c:Country {code: $code}) RETURN c.iroko_uuid as uuid", code=country_code)
+        rec = await result.single()
+        existing_uuid = UUID(rec["uuid"]) if rec else None
+
+        node = await service.merge_node(
+            iroko_uuid=existing_uuid, name=country_name,
+            labels=['Country'],
+            data={'code': country_code, 'name': country_name})
+
+        return str(node.iroko_uuid)
 
     def _normalize_country_code_and_name(self, country_code, country_name):
         """Comprehensive country normalization returning 2-letter code and name."""

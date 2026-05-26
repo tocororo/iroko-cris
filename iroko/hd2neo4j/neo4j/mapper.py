@@ -221,7 +221,7 @@ class Mapper:
 
         predicate = values_of_entity_config.get(values_of).get(__predicate_source)
 
-        object_value = identifier_data.get(identifier_config.get("__object"))
+        object_value = sanitize_str_value(identifier_data.get(identifier_config.get("__object")))
 
         return {predicate: object_value}
 

@@ -41,7 +41,8 @@ class DataImportTask(CrawlerTask):
                 app_settings.neo4j_uri,
                 app_settings.neo4j_username,
                 app_settings.neo4j_password,
-                app_settings.neo4j_database
+                app_settings.neo4j_database,
+                pg_url=app_settings.database_url,
             )
 
             mapper_service = MapperService(
