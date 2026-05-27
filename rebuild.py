@@ -202,18 +202,18 @@ async def run_crawler_tasks():
             "ror": ".data-init/orgs-ror-cuban-records.json",
             "output": ".data-init/orgs-tasks-2025.json",
         }),
-        # ORCID dump processing (identify Cubans)
-        ("OrcidDumpProcessingTask", {
-            "task_id": "orcid_dump_task",
-            "orcid_dump_path": ".data/orcid/orcid_de_cubanos",
-            "output_json": ".data/orcid/cuban_researchers/output.json",
-            "output_dir": ".data/orcid/cuban_researchers",
-        }),
+        # # ORCID dump processing (identify Cubans)
+        # ("OrcidDumpProcessingTask", {
+        #     "task_id": "orcid_dump_task",
+        #     "orcid_dump_path": ".data/orcid/orcid_de_cubanos",
+        #     "output_json": ".data/orcid/cuban_researchers/output.json",
+        #     "output_dir": ".data/orcid/cuban_researchers",
+        # }),
         # ORCID mapping to Iroko schema
         ("OrcidMappingTask", {
             "task_id": "orcid_mapping_task",
-            "input_folder": ".data/orcid/cuban_researchers",
-            "output_folder": ".data/orcid/cuban_researchers_out",
+            "input_folder": ".data-init/orcid/cuban_researchers",
+            "output_folder": ".data-init/orcid/cuban_researchers_out",
             "diune_path": ".data-init/orgs-onei-duine-septiembre-2025-fix.xlsx",
             "person_schema_path": "docs/schema/person-v1.0.0.json",
         }),

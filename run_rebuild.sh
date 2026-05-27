@@ -36,6 +36,7 @@ podman run -d \
     --restart on-failure:2 \
     --env-file ./.env.production \
     --memory=2g \
+    -v "$(pwd)/rebuild.py:/app/rebuild.py:Z,ro" \
     -v "$(pwd)/.data-init:/app/.data-init:Z,rw" \
     -v "$(pwd)/logs:/app/logs:Z,rw" \
     -v "$(pwd)/docs:/app/docs:Z,ro" \
