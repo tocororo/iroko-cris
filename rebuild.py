@@ -12,6 +12,7 @@ import logging
 import sys
 import time
 from pathlib import Path
+from enum import Enum
 
 sys.path.insert(0, str(Path(__file__).parent))
 
@@ -202,13 +203,13 @@ async def run_crawler_tasks():
             "ror": ".data-init/orgs-ror-cuban-records.json",
             "output": ".data-init/orgs-tasks-2025.json",
         }),
-        # # ORCID dump processing (identify Cubans)
-        # ("OrcidDumpProcessingTask", {
-        #     "task_id": "orcid_dump_task",
-        #     "orcid_dump_path": ".data/orcid/orcid_de_cubanos",
-        #     "output_json": ".data/orcid/cuban_researchers/output.json",
-        #     "output_dir": ".data/orcid/cuban_researchers",
-        # }),
+        # ORCID dump processing (identify Cubans)
+        ("OrcidDumpProcessingTask", {
+            "task_id": "orcid_dump_task",
+            "orcid_dump_path": ".data-init/orcid/cuban_researchers",
+            "output_json": ".data/orcid/cuban_researchers/output.json",
+            "output_dir": ".data/orcid/cuban_researchers",
+        }),
         # ORCID mapping to Iroko schema
         ("OrcidMappingTask", {
             "task_id": "orcid_mapping_task",
@@ -267,24 +268,48 @@ async def verify():
 # Main
 # ---------------------------------------------------------------------------
 
+class Phase(str, Enum):
+    ALL = "all"
+    IMPORT = "import"
+    ENRICH = "enrich"
+    VERIFY = "verify"
+
+
 async def main():
+    phase = Phase(sys.argv[1]) if len(sys.argv) > 1 else Phase.ALL
     start = time.time()
 
-    await drop_databases()
-    await init_databases()
+    if phase == Phase.ALL:
+        await drop_databases()
+        await init_databases()
+        loop = asyncio.get_event_loop()
+        await loop.run_in_executor(None, import_bulk_data)
+        await run_crawler_tasks()
+        await verify()
 
-    loop = asyncio.get_event_loop()
-    await loop.run_in_executor(None, import_bulk_data)
+    elif phase == Phase.IMPORT:
+        await drop_databases()
+        await init_databases()
+        loop = asyncio.get_event_loop()
+        await loop.run_in_executor(None, import_bulk_data)
 
-    # Bulk import and crawler tasks both write atomically to PG+MG,
-    # so no post-sync step is needed.
-    await run_crawler_tasks()
+    elif phase == Phase.ENRICH:
+        await run_crawler_tasks()
+        await verify()
 
-    await verify()
+    elif phase == Phase.VERIFY:
+        await verify()
 
     elapsed = time.time() - start
-    logger.info(f"\nRebuild complete in {elapsed:.1f}s")
+    logger.info(f"\n{'Phase' if phase != Phase.ALL else 'Rebuild'} complete in {elapsed:.1f}s")
 
 
 if __name__ == "__main__":
+    if len(sys.argv) > 1 and sys.argv[1] not in ("all", "import", "enrich", "verify"):
+        print(f"Usage: python rebuild.py [all|import|enrich|verify]")
+        print(f"  all      — full pipeline (default)")
+        print(f"  import   — drop + init + bulk import")
+        print(f"  enrich   — crawler tasks + verify")
+        print(f"  verify   — check sync status only")
+        sys.exit(1)
     asyncio.run(main())

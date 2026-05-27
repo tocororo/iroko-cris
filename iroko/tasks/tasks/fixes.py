@@ -181,7 +181,7 @@ class IdentifierFixTask(CrawlerTask):
                 prop_fetch_query = """
                 MATCH (n) 
                 WHERE ANY(key IN keys(n) WHERE key STARTS WITH 'identifier#')
-                RETURN elementId(n) AS element_id, [key IN keys(n) WHERE key STARTS WITH 'identifier#'] AS identifier_keys
+                RETURN id(n) AS element_id, [key IN keys(n) WHERE key STARTS WITH 'identifier#'] AS identifier_keys
                 """
                 prop_result = await session.run(prop_fetch_query)
                 
@@ -191,7 +191,7 @@ class IdentifierFixTask(CrawlerTask):
                     
                     # Get the node's iroko_uuid
                     uuid_fetch = await session.run(
-                        "MATCH (n) WHERE elementId(n) = $eid RETURN n.iroko_uuid as uuid",
+                        "MATCH (n) WHERE id(n) = $eid RETURN n.iroko_uuid as uuid",
                         eid=element_id)
                     uuid_rec = await uuid_fetch.single()
                     node_uuid = uuid_rec["uuid"] if uuid_rec else None
@@ -205,7 +205,7 @@ class IdentifierFixTask(CrawlerTask):
                         
                         code = match.group(1)
                         value_fetch = await session.run(
-                            f"MATCH (n) WHERE elementId(n) = $eid RETURN n.`{prop_key}` AS val",
+                            f"MATCH (n) WHERE id(n) = $eid RETURN n.`{prop_key}` AS val",
                             eid=element_id)
                         value_rec = await value_fetch.single()
                         if not value_rec or value_rec["val"] is None:
@@ -231,7 +231,7 @@ class IdentifierFixTask(CrawlerTask):
 
                         # Remove the original property from MG
                         await session.run(
-                            f"MATCH (n) WHERE elementId(n) = $eid REMOVE n.`{prop_key}`",
+                            f"MATCH (n) WHERE id(n) = $eid REMOVE n.`{prop_key}`",
                             eid=element_id)
                         
                         self.created_identifiers += 1

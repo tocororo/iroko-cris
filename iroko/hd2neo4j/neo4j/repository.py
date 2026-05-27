@@ -5,6 +5,8 @@ from neo4j import GraphDatabase
 from sqlalchemy import create_engine, text
 from iroko.hd2neo4j.types.mapper_types import Node, Relation
 
+_MG_UUID_NS = uuid_pkg.UUID("6ba7b811-9dad-11d1-80b4-00c04fd430c8")  # uuid.NAMESPACE_DNS
+
 
 class RepositorySingleton:
     _instance = None
@@ -99,12 +101,16 @@ class Neo4jRepository(RepositorySingleton):
         with self._pg_engine.begin() as conn:
             conn.execute(stmt, {"from_uuid": from_uuid})
 
+    @staticmethod
+    def _deterministic_uuid(node: Node) -> str:
+        return str(uuid_pkg.uuid5(_MG_UUID_NS, str(node.id)))
+
     # ------------------------------------------------------------------
     # Core operations
     # ------------------------------------------------------------------
 
     def add_node(self, node: Node):
-        iroko_uuid = str(uuid_pkg.uuid4())
+        iroko_uuid = self._deterministic_uuid(node)
         now = datetime.utcnow().isoformat()
         node.properties.setdefault("iroko_uuid", iroko_uuid)
         node.properties.setdefault("_updated_at", now)
@@ -119,8 +125,8 @@ class Neo4jRepository(RepositorySingleton):
     def add_relation(self, relation: Relation):
         now = datetime.utcnow().isoformat()
 
-        origin_uuid = str(uuid_pkg.uuid4())
-        target_uuid = str(uuid_pkg.uuid4())
+        origin_uuid = self._deterministic_uuid(relation.start_node)
+        target_uuid = self._deterministic_uuid(relation.target_node)
         relation.start_node.properties.setdefault("iroko_uuid", origin_uuid)
         relation.start_node.properties.setdefault("_updated_at", now)
         relation.target_node.properties.setdefault("iroko_uuid", target_uuid)

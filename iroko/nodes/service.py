@@ -551,7 +551,7 @@ class NodeService:
         pg_updated_at = pg_ts_result.scalar()
 
         mg_result = await self.mg.run(
-            "MATCH (n:Node) RETURN count(n) as cnt, max(n._updated_at) as max_ts"
+            "MATCH (n) RETURN count(n) as cnt, max(n._updated_at) as max_ts"
         )
         mg_record = await mg_result.single()
         mg_count = mg_record["cnt"] if mg_record else 0
@@ -580,7 +580,7 @@ class LegacySyncService:
         query = """
         MATCH (n)
         WHERE n.iroko_uuid IS NULL OR n.name IS NULL
-        RETURN elementId(n) as id, labels(n) as labels, properties(n) as props
+        RETURN id(n) as id, labels(n) as labels, properties(n) as props
         LIMIT $limit
         """
         result = await self.mg.run(query, limit=limit)
