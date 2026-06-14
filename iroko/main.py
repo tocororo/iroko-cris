@@ -1,3 +1,4 @@
+import asyncio
 from fastapi import FastAPI
 from contextlib import asynccontextmanager
 from iroko.storage import neo4j_db
@@ -34,8 +35,12 @@ async def lifespan(app: FastAPI):
     
     if app_settings.app_env != "test":
         try:
-            neo4j_db.get_session()
-            
+            async with asyncio.timeout(30):
+                mg_session = neo4j_db.get_session()
+                await mg_session.run("RETURN 1")
+                await mg_session.close()
+                logger.info("Memgraph connection verified")
+
             await init_db()
             
             await initialize_auth_system()
@@ -48,6 +53,9 @@ async def lifespan(app: FastAPI):
             await eval_service.preload_all_methodology_rules()
 
             logger.info("All services initialized successfully")
+        except asyncio.TimeoutError:
+            logger.error("Startup timed out: Memgraph not reachable within 30s")
+            raise
         except Exception as e:
             logger.error(f"Service initialization failed: {e}")
             raise

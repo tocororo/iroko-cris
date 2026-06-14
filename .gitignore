@@ -116,3 +116,4 @@ CodeFlattened_Output
 deploy*.sh
 .env*
 ansible*.yml
+opencode.json
